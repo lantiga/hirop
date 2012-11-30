@@ -1,4 +1,4 @@
-(ns hirop.session
+(ns hirop.session-frontend
   (:use [clojure.set :only [union]])
   (:require [hirop.core :as hirop]
             [hirop.backend :as backend]
@@ -107,7 +107,7 @@
 (defn any-conflicted []
   (str (hirop/any-conflicted? (session/get :store))))
 
-(defn checkout-conflicted
+(defn checkout-conflicted []
   (hirop/checkout-conflicted (session/get :store)))
 
 (defn push []

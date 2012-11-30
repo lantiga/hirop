@@ -1,5 +1,5 @@
 (ns hirop.core
-  (:use clojure.set)
+  (:use [clojure.set :only [union select difference]])
   (:require [clojure.string :as string]))
 
 (defn- #^String chop
@@ -139,7 +139,11 @@
 (defn- rev-number [rev]
   (if (string? rev)
     (if (re-find #"-" rev)
+      ;*CLJSBUILD-REMOVE*;(cljs.reader/read-string (first (string/split rev #"-")))
+      ;*CLJSBUILD-REMOVE*;#_
       (read-string (first (string/split rev #"-")))
+      ;*CLJSBUILD-REMOVE*;(cljs.reader/read-string rev)
+      ;*CLJSBUILD-REMOVE*;#_
       (read-string rev))
     rev))
 

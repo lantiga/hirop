@@ -63,7 +63,7 @@
                            document (assoc document :_id new-id :_rev (hirop/zero-rev))]
                        (conj res document)))
                    []
-                   (repeat (read-string n) nil))))
+                   (repeat n nil))))
          {}
          doctype-map)]
     document-map))
@@ -122,7 +122,7 @@
   {:result (hirop/get-push-result (session/get :store))})
 
 (defn save [documents]
-  (let [store (session/update-in! [:store] (hirop/mcommit documents)) 
+  (let [store (session/update-in! [:store] hirop/mcommit documents) 
         save-info (hirop/push-save store (partial backend/save (session/get :backend)))]
     (session/update-in! [:store] hirop/push-post-save save-info))
   {:result (hirop/get-push-result (session/get :store))})

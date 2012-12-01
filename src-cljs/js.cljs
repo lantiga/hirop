@@ -1,4 +1,4 @@
-(ns hirop.js-frontend)
+(ns hirop.js)
 
 ;; TODO: write a clojurescript frontend that basically calls into all these functions
 ;; but makes it easier to call them from javascript (for clojurescript these are fine).

@@ -7,7 +7,7 @@
   :cljsbuild
   {:builds [{:source-path "src-cljs"
              :compiler {
-                        :output-to "js/hirop.js"
+                        :output-to "out-js/hirop.js"
                         ;;:optimizations :whitespace
                         ;;:optimizations :simple
                         :optimizations :advanced

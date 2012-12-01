@@ -1,4 +1,4 @@
-(ns hirop.session-frontend
+(ns hirop.stateful
   (:use [clojure.set :only [union]])
   (:require [hirop.core :as hirop]
             [hirop.backend :as backend]

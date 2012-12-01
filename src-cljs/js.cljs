@@ -1,4 +1,5 @@
-(ns hirop.js)
+(ns hirop.js
+  (:require [hirop.stateful :as hirop]))
 
 ;; TODO: write a clojurescript frontend that basically calls into all these functions
 ;; but makes it easier to call them from javascript (for clojurescript these are fine).

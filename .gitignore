@@ -2,7 +2,11 @@
 /lib
 /classes
 /checkouts
+/js
+/.lein-cljsbuild-compiler*
+crossovers
 pom.xml
+*.swp
 *.jar
 *.class
 .lein-deps-sum

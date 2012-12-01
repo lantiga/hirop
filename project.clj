@@ -5,7 +5,7 @@
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :plugins [[lein-cljsbuild "0.2.9"]]
   :cljsbuild
-  {:builds [{:source-path "hirop-cljs"
+  {:builds [{:source-path "src-cljs"
              :compiler {
                         :output-to "js/hirop.js"
                         ;;:optimizations :whitespace
@@ -15,5 +15,5 @@
    :crossovers
    [hirop.core hirop.backend hirop.session hirop.session-frontend],
    :crossover-jar false,
-   :crossover-path "hirop-cljs"}
+   :crossover-path "src-cljs/crossovers"}
   :dependencies [[org.clojure/clojure "1.4.0"]])

@@ -8,8 +8,10 @@
   {:builds [{:source-path "hirop-cljs"
              :compiler {
                         :output-to "js/hirop.js"
-                        :optimizations :whitespace
-                        :pretty-print true}}],
+                        ;;:optimizations :whitespace
+                        ;;:optimizations :simple
+                        :optimizations :advanced
+                        :pretty-print false}}],
    :crossovers
    [hirop.core hirop.backend hirop.session hirop.session-frontend],
    :crossover-jar false,

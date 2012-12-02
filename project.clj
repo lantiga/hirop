@@ -9,8 +9,8 @@
              :compiler {
                         :output-to "out-js/hirop.js"
                         ;;:optimizations :whitespace
-                        ;;:optimizations :simple
-                        :optimizations :advanced
+                        :optimizations :simple
+                        ;;:optimizations :advanced
                         :pretty-print false}}],
    :crossovers
    [hirop.core hirop.backend hirop.session hirop.stateful],

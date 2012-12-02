@@ -4,7 +4,7 @@
             [hirop.backend :as backend]
             [hirop.session :as session]))
 
-(defn init [{:keys [backend doctypes contexts]}]
+(defn init [doctypes contexts backend]
   (session/clear!)
   (session/put! :backend backend)
   (session/put! :doctypes doctypes)

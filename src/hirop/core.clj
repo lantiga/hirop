@@ -244,7 +244,10 @@
   ;; Here baseline could already be at a greater revision number compared to the committed document
   ;; had the latter been checked out some time before the commit.
   (let [baseline (get-stored store (:_id document))
-        timestamp (.. (java.text.SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:ssZ") (format (java.util.Date.)))
+        timestamp
+        ;*CLJSBUILD-REMOVE*;(.toISOString (js/Date.))
+        ;*CLJSBUILD-REMOVE*;#_
+        (.. (java.text.SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:ssZ") (format (java.util.Date.)))
         document (assoc document :_meta (assoc (:meta store) :timestamp timestamp))
         store (if (:_id document) store (inc-uuid store))
         document (if (:_id document) document (assoc document :_id (get-uuid store) :_rev (zero-rev)))]

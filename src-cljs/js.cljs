@@ -28,7 +28,7 @@
 
 (defn ^:export test-init []
   (binding [*hirop-session* session]
-    (hirop/init foo-doctypes {:foo foo-context} :foo)))
+    (hirop/init test-doctypes {:foo test-context} :foo)))
 
 
 (defn ^:export init [doctypes contexts backend]

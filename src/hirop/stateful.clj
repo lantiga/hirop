@@ -27,14 +27,14 @@
 (defn clean-context []
   (session/remove-keys! [:store :context]))
 
-(defn init-context [context-name external-ids meta]
+(defn create-context [context-name external-ids meta]
   (let [contexts (session/get :contexts)
         doctypes (session/get :doctypes)
         loggedin (session/get :loggedin)
         context-name (keyword context-name)
         context (get contexts context-name)
         configurations (get-in contexts [context-name :configurations])
-        context (hirop/init-context context-name context doctypes configurations external-ids)
+        context (hirop/create-context context-name context doctypes configurations external-ids)
         store (hirop/new-store context-name meta)]
     (when (get contexts context-name)
       (session/update!

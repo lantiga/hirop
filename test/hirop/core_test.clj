@@ -20,13 +20,17 @@
    :configurations {}})
 
 (defn cardinality-test-fetcher [context-name external-ids boundaries]
-  [{:_id "0" :_type :Foo :id "0"}
-   {:_id "1" :_type :Bar :Foo_ "0" :title "First"}
-   {:_id "2" :_type :Bar :Foo_ "0" :id "Second"}
-   {:_id "3" :_type :Baz :Bar_ ["1" "2"] :title "Third"}])
+  [{:_hirop {:id "0" :type :Foo}
+    :id "0"}
+   {:_hirop {:id "1" :type :Bar :rels {:Foo "0"}}
+    :title "First"}
+   {:_hirop {:id "2" :type :Bar :rels {:Foo "0"}}
+    :title "Second"}
+   {:_hirop {:id "3" :type :Baz :rels {:Bar ["1" "2"]}}
+    :title "Third"}])
 
 (deftest cardinality-test
-  (let [context (init-context :Test cardinality-test-context doctypes {} {:Foo "0"})
+  (let [context (create-context :Test cardinality-test-context doctypes {} {:Foo "0"})
         store (new-store :Test {})
         store (fetch store context cardinality-test-fetcher)
         store (merge-remote store)
@@ -51,13 +55,14 @@
    :configurations {}})
 
 (defn remap-test-fetcher [context-name external-ids boundaries]
-  [{:_id "0" :_type :Foo :id "0"}])
+  [{:_hirop {:id "0" :type :Foo}
+    :id "0"}])
 
 (defn remap-test-saver [docs context-name]
   {:result :success :remap {"tmp1" "1" "tmp2" "2" "tmp3" "3"}})
 
 (deftest remap-test
-  (let [context (init-context :Test remap-test-context doctypes {} {:Foo "0"})
+  (let [context (create-context :Test remap-test-context doctypes {} {:Foo "0"})
         store (new-store :Test {})
         store (fetch store context remap-test-fetcher)
         store (merge-remote store)
@@ -67,9 +72,9 @@
         id1 (get-uuid store)
         store (inc-uuid store)
         id2 (get-uuid store)
-        bar1 (merge (new-document context :Bar) {:_id id0 :Foo_ "0"})
-        bar2 (merge (new-document context :Bar) {:_id id1 :Foo_ "0"})
-        baz (merge (new-document context :Baz) {:_id id2 :Bar_ [id0 id1]})
+        bar1 (assoc (new-document context :Bar) :_hirop {:id id0 :rels {:Foo "0"}})
+        bar2 (assoc (new-document context :Bar) :_hirop {:id id1 :rels {:Foo "0"}})
+        baz (assoc (new-document context :Baz) :_hirop {:id id2 :rels {:Bar [id0 id1]}})
         store (mcommit store [bar1 bar2 baz])
         store (select-document store context "0" :test)
         store (push store remap-test-saver)]
@@ -99,16 +104,23 @@
    :configurations {}})
 
 (defn select-all-test-fetcher [context-name external-ids boundaries]
-  [{:_id "0" :_type :Foo :id "0"}
-   {:_id "1" :_type :Bar :Foo_ "0" :title "First"}
-   {:_id "2" :_type :Bar :Foo_ "0" :id "Second"}
-   {:_id "3" :_type :Baz :Bar_ "2" :title "Third"}
-   {:_id "4" :_type :Baz :Bar_ "2" :id "Fourth"}
-   {:_id "5" :_type :Baz :Bar_ "1" :title "Fifth"}
-   {:_id "6" :_type :Baz :Bar_ "1" :id "Sixth"}])
+  [{:_hirop {:id "0" :type :Foo}
+    :id "0"}
+   {:_hirop {:id "1" :type :Bar :rels {:Foo "0"}}
+    :title "First"}
+   {:_hirop {:id "2" :type :Bar :rels {:Foo "0"}}
+    :id "Second"}
+   {:_hirop {:id "3" :type :Baz :rels {:Bar "2"}}
+    :title "Third"}
+   {:_hirop {:id "4" :type :Baz :rels {:Bar "2"}}
+    :id "Fourth"}
+   {:_hirop {:id "5" :type :Baz :rels {:Bar "1"}}
+    :title "Fifth"}
+   {:_hirop {:id "6" :type :Baz :rels {:Bar "1"}}
+    :id "Sixth"}])
 
 (deftest select-all-test
-  (let [context (init-context :Test select-all-test-context doctypes {} {:Foo "0"})
+  (let [context (create-context :Test select-all-test-context doctypes {} {:Foo "0"})
         store (new-store :Test {})
         store (fetch store context select-all-test-fetcher)
         store (merge-remote store)
@@ -135,16 +147,17 @@
    :configurations {}})
 
 (defn select-defaults-test-fetcher [context-name external-ids boundaries]
-  [{:_id "0" :_type :Foo :id "0"}])
+  [{:_hirop {:id "0" :type :Foo}
+    :id "0"}])
 
 (deftest select-defaults-test
-  (let [context (init-context :Test select-defaults-test-context doctypes {} {:Foo "0"})
+  (let [context (create-context :Test select-defaults-test-context doctypes {} {:Foo "0"})
         store (new-store :Test {})
         store (fetch store context select-defaults-test-fetcher)
         store (merge-remote store)
         store (select-defaults store context :test-defaults)
         store (select-defaults store context :test-defaults)]
-    (is (= {:Foo [{:_id "0", :id "0", :_type :Foo}]}
+    (is (= {:Foo [{:_hirop {:id "0" :type :Foo} :id "0"}]}
            (checkout-selected store :test-defaults)))))
 
 
@@ -153,13 +166,20 @@
    :selections {}})
 
 (defn conflict-test-fetcher-1 [context-name external-ids boundaries]
-  [{:_id "0" :_type :Foo :_meta {} :id "0"}])
+  [{:_hirop {:id "0" :type :Foo :meta {}}
+    :id "0"}])
 
 (defn conflict-test-fetcher-2 [context-name external-ids boundaries]
-  [{:_id "0" :_type :Foo :_meta {} :id "0"} {:_id "1" :_type :Bar :_meta {} :title "" :Foo_ "0"}])
+  [{:_hirop {:id "0" :type :Foo :meta {}}
+    :id "0"}
+   {:_hirop {:id "1" :type :Bar :meta {} :rels {:Foo "0"}}
+    :title ""}])
 
 (defn conflict-test-fetcher-3 [context-name external-ids boundaries]
-  [{:_id "0" :_type :Foo :_meta {} :id "0"} {:_id "1" :_type :Bar :_meta {} :title "BAR" :Foo_ "0"}])
+  [{:_hirop {:id "0" :type :Foo :meta {}}
+    :id "0"}
+   {:_hirop {:id "1" :type :Bar :meta {} :rels {:Foo "0"}}
+    :title "BAR"}])
 
 (defn conflict-test-saver-1 [docs context-name]
   {:result :success :remap {"tmp1" "1"}})
@@ -168,13 +188,13 @@
   {:result :success :remap {}})
 
 (deftest remap-test
-  (let [context (init-context :Test remap-test-context doctypes {} {:Foo "0"})
+  (let [context (create-context :Test remap-test-context doctypes {} {:Foo "0"})
         store (new-store :Test {})
         store (fetch store context conflict-test-fetcher-1)
         store (merge-remote store)
         store (inc-uuid store)
         id0 (get-uuid store)
-        bar (merge (new-document context :Bar) {:_id id0 :Foo_ "0"})
+        bar (assoc (new-document context :Bar) :_hirop {:id id0 :rels {:Foo "0"}})
         store (commit store bar)
         store (push store conflict-test-saver-1)
         store (fetch store context conflict-test-fetcher-2)

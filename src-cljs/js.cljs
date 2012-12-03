@@ -43,8 +43,8 @@
 (defn ^:export clean-context []
   (js-f hirop/clean-context))
 
-(defn ^:export init-context [context-name external-ids meta]
-  (js-f hirop/init-context context-name external-ids meta))
+(defn ^:export create-context [context-name external-ids meta]
+  (js-f hirop/create-context context-name external-ids meta))
 
 (defn ^:export new-document [doctype]
   (js-f hirop/new-document doctype))

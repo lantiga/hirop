@@ -23,21 +23,55 @@
          (new java.math.BigInteger 1 (.digest hash-bytes)) ; Positive and the size of the number
          16))) ; Use base16 i.e. hex
 
-(defn- relation-field?
-  [field]
-  (= \_ (last (name field))))
+(defn hid [doc]
+  (get-in doc [:_hirop :id]))
 
-(defn- doctype->relation
-  [doctype]
-  (if (not= \_ (last (name doctype)))
-    (keyword (str (name doctype) "_"))
-    doctype))
+(defn hrev [doc]
+  (get-in doc [:_hirop :rev]))
 
-(defn- relation->doctype
-  [relation]
-  (if (= \_ (last (name relation)))
-    (keyword (chop (name relation)))
-    relation))
+(defn hrels [doc]
+  (get-in doc [:_hirop :rels]))
+
+(defn hrel [doc doctype]
+  (get-in doc [:_hirop :rels doctype]))
+
+(defn htype [doc]
+  (keyword (get-in doc [:_hirop :type])))
+
+(defn hmeta [doc]
+  (get-in doc [:_hirop :meta]))
+
+(defn hconf [doc]
+  (get-in doc [:_hirop :conf]))
+
+(defn assoc-hid [doc id]
+  (assoc-in doc [:_hirop :id] id))
+
+(defn assoc-hrev [doc rev]
+  (assoc-in doc [:_hirop :rev] rev))
+
+(defn assoc-hrels [doc rels]
+  (assoc-in doc [:_hirop :rels] rels))
+
+(defn assoc-hrel [doc doctype rel-id]
+  (assoc-in doc [:_hirop :rels doctype] rel-id))
+
+(defn assoc-htype [doc type]
+  (assoc-in doc [:_hirop :type] (name type)))
+
+(defn assoc-hmeta [doc meta]
+  (assoc-in doc [:_hirop :meta] meta))
+
+(defn assoc-hconf [doc conf]
+  (assoc-in doc [:_hirop :conf] conf))
+
+(defn is-temporary-id?
+  [id]
+  (string? (re-find #"^tmp" id)))
+
+(defn has-temporary-id?
+  [doc]
+  (is-temporary-id? (hid doc)))
 
 (defn- get-relation-fields
   [context doctype val]
@@ -46,7 +80,7 @@
      (if (or
           (= doctype (:from el))
           (= :* (:from el)))
-       (assoc res (doctype->relation (:to el)) val)
+       (assoc res (:to el) val)
        res))
    {}
    (:relations context)))
@@ -60,7 +94,7 @@
   (filter #(not (contains? (:external-ids context) %)) (get-external-doctypes context)))
 
 ;; TODO: here we should check that all relations marked as external are specified in external-ids, otherwise fail
-(defn init-context
+(defn create-context
   [context-name context doctypes configurations external-ids]
   (->
    context
@@ -74,40 +108,44 @@
   (let [configuration (-> context :configurations doctype)
         relations (get-relation-fields context doctype "String")]
     (->
-     (-> context :doctypes doctype)
-     (assoc
-         :_id {}
-         :_rev {}
-         :_type {}
-         :_meta {}
-         :_conf configuration)
-     (merge relations))))
+     (get-in context [:doctypes doctype])
+     (assoc :_hirop
+       {:id {}
+        :rev {}
+        :type {}
+        :meta {}
+        :conf configuration
+        :rels relations}))))
 
 (def empty-document
-     {:_id nil
-      :_rev nil
-      :_meta nil
-      :_type nil
-      :_conf nil})
+  {:_hirop
+   {:id nil
+    :rev nil
+    :meta nil
+    :type nil
+    :conf nil
+    :rels nil}})
 
 ;; TODO: here we embed configuration into each document.
 ;;      :_conf (md5 (json/generate-string configuration))))))
 (defn new-document
   [context doctype]
-  (let [fields (zipmap (keys (-> context :doctypes doctype :fields)) (repeat ""))
-        configuration (-> context :configurations doctype)
+  (let [fields (zipmap (keys (get-in context [:doctypes doctype :fields])) (repeat ""))
+        configuration (get-in context [:configurations doctype])
         relations (get-relation-fields context doctype nil)
         relations (reduce
-                   (fn [rels [k v]] (let [k (doctype->relation k)] (if (contains? rels k) (assoc rels k v) rels)))
+                   (fn [rels [k v]]
+                     (if (contains? rels k)
+                       (assoc rels k v)
+                       rels))
                    relations
-                   (-> context :external-ids))]
+                   (get context :external-ids))]
     (->
      empty-document
-     (assoc
-         :_type (name doctype)
-         :_conf configuration)
-     (merge fields)
-     (merge relations))))
+     (assoc-htype doctype)
+     (assoc-in [:_hirop :conf] configuration)
+     (assoc-hrels relations)
+     (merge fields))))
 
 (defn new-store
   ([context-name]
@@ -136,6 +174,7 @@
   [store]
   (str "tmp" (:uuid store) ""))
 
+;; TODO: have a specification for hirop rev (vector clock?). This is too backend-specific.
 (defn- rev-number [rev]
   (if (string? rev)
     (if (re-find #"-" rev)
@@ -153,7 +192,7 @@
 
 (defn older?
   [document1 document2]
-  (neg? (compare-revs (:_rev document1) (:_rev document2))))
+  (neg? (compare-revs (hrev document1) (hrev document2))))
 
 (def newer?
      (complement older?))
@@ -162,7 +201,7 @@
   [doc-or-id]
   (if (string? doc-or-id)
     doc-or-id
-    (:_id doc-or-id)))
+    (hid doc-or-id)))
 
 (defn get-document
   ([store id]
@@ -204,27 +243,27 @@
 
 (defn revision
   ([store id]
-     (:_rev ((get-document store id))))
+     (hrev ((get-document store id))))
   ([store id bucket]
-     (:_rev ((get-document store id bucket)))))
+     (hrev ((get-document store id bucket)))))
 
 (defn add-document
   ([store document]
      (add-document store document :stored))
   ([store document bucket]
-     (assoc-in store [bucket (:_id document)] document)))
+     (assoc-in store [bucket (hid document)] document)))
 
 (defn add-document-if-newer
   ([store document]
      (add-document-if-newer store document :stored))
   ([store document bucket]
-     (if (newer? document (get-document store (:_id document)))
+     (if (newer? document (get-document store (hid document)))
        (add-document store document bucket)
        store)))
 
 (defn add-to-set
   [store document set-name]
-  (update-in store [set-name] #(conj % (:_id document))))
+  (update-in store [set-name] #(conj % (hid document))))
 
 (defn add-to-local
   [store document]
@@ -243,14 +282,16 @@
   ;; In a multi-threaded environment, this should be atomic (like all the others, in any case)
   ;; Here baseline could already be at a greater revision number compared to the committed document
   ;; had the latter been checked out some time before the commit.
-  (let [baseline (get-stored store (:_id document))
+  (let [baseline (get-stored store (hid document))
         timestamp
         ;*CLJSBUILD-REMOVE*;(.toISOString (js/Date.))
         ;*CLJSBUILD-REMOVE*;#_
         (.. (java.text.SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:ssZ") (format (java.util.Date.)))
-        document (assoc document :_meta (assoc (:meta store) :timestamp timestamp))
-        store (if (:_id document) store (inc-uuid store))
-        document (if (:_id document) document (assoc document :_id (get-uuid store) :_rev (zero-rev)))]
+        document (assoc-hmeta document (assoc (:meta store) :timestamp timestamp))
+        store (if (hid document) store (inc-uuid store))
+        document (if (hid document)
+                   document
+                   (-> document (assoc-hid (get-uuid store)) (assoc-hrev (zero-rev))))]
     (-> store
         ((fn [store] (if baseline (add-document store baseline :baseline) store)))
         (add-document document :starred)
@@ -276,9 +317,9 @@
 
 (defn conflicted?
   [store id]
-  (let [starred (dissoc (get-document store id :starred) :_rev :_meta)
-        stored (dissoc (get-document store id :stored) :_rev :_meta)
-        baseline (dissoc (get-document store id :baseline) :_rev :_meta)]
+  (let [starred (dissoc (get-document store id :starred) :_hirop)
+        stored (dissoc (get-document store id :stored) :_hirop)
+        baseline (dissoc (get-document store id :baseline) :_hirop)]
     (if (nil? starred)
       false
       (and
@@ -296,17 +337,17 @@
 (defn checkout-conflicted
   [store]
   (group-by
-   #(get-in % [:stored :_type])
+   #(htype (get % :stored))
    (map
     (fn [id]
+      ;; TODO: make stored be a list (eventual consistency)s
       {:stored (get-document store id :stored)
        :starred (get-document store id :starred)
        :baseline (get-document store id :baseline)})
    (get-conflicted-ids store))))
 
 (defn merge-document
-  ;; In case of fast-forward, we advance :_rev, otherwise we don't.
-  ;; TODO: _meta should be only overwritten and shouldn't originate a conflict
+  ;; In case of fast-forward, we advance :rev, otherwise we don't.
   [store id]
   (let [starred (get-document store id :starred)
         stored (get-document store id :stored)
@@ -317,13 +358,11 @@
              (fn [document key]
                (assoc document key (get stored key)))
              starred
-             (filter
-              (fn [key]
-                (and
-                 (not (contains? #{:_id :_rev} key))
-                 (= (get starred key) (get baseline key))))
-              (keys stored)))
-            merged (if (conflicted? store id) merged (assoc merged :_rev (get stored :_rev)))]
+             (keys (dissoc stored :_hirop)))
+            ;; TODO: consider merging more of _hirop than just rev
+            merged (if (conflicted? store id)
+                     merged
+                     (assoc-hrev merged (hrev stored)))]
         (add-document store merged :starred))
       store)))
 
@@ -385,8 +424,9 @@
                             (if (coll? val)
                               [k (vec (map #(or (get tmp-map %) %) val))]
                               [k (or (get tmp-map val) val)]))
-                          (select-keys doc (filter relation-field? (keys doc)))))
-                new-doc (-> doc (assoc :_id new-id) (merge new-relations))]
+                          (hrels doc)))
+                new-doc (assoc-hid doc new-id)
+                new-doc (assoc-hrels doc new-relations)]
             [new-id new-doc]))
         starred))))
    (update-in
@@ -447,7 +487,7 @@
 
 (defn- get-ids-of-type
   [store doctype]
-  (select #(= (name doctype) (name (:_type (get-document store %)))) (:local store)))
+  (select #(= (name doctype) (name (htype (get-document store %)))) (:local store)))
 
 (defn checkout
   ([store]
@@ -480,23 +520,33 @@
       :out (filter (fn [rel] (= doctype (rel :from))) (context :relations))
       :in (filter (fn [rel] (= doctype (rel :to))) (context :relations))))
 
-(defn- set-relation-ids
-  [store context selection-id doctype rel-doctype field rel-field]
-  (let [ids (get-in store [:selections selection-id doctype])]
+(defn- walk-relation
+  [store context selection-id doctype rel]
+  (let [ids (get-in store [:selections selection-id doctype])
+        [direction rel-doctype]
+        (condp = doctype
+          (:from rel) [:out (:to rel)]
+          (:to rel) [:in (:from rel)])]
     (reduce
      (fn [store id]
-       (let [values (get (get-document store id) field)
-             values (if (coll? values) values [values])
+       (let [values
+             (condp = direction
+               :out (hrel (get-document store id) rel-doctype)
+               :in (hid (get-document store id)))
+             values (if (coll? values) values (vector values))
              rel-ids
              (reduce
               (fn [out value]
                 (let [rel-ids
                       (filter
                        (fn [rel-id]
-                         (let [rel-value (get (get-document store rel-id) rel-field)]
-                           (if (coll? rel-value)
-                             (some #(= value %) rel-value)
-                             (= value rel-value))))
+                         (let [rel-values
+                               (condp = direction
+                                 :out rel-id
+                                 :in (hrel (get-document store rel-id) doctype))]
+                           (if (coll? rel-values)
+                             (some #(= value %) rel-values)
+                             (= value rel-values))))
                        (get-ids-of-type store rel-doctype))
                       rel-ids (if-let [sort-keys (get-in context [:selections selection-id rel-doctype :sort-by])]
                                 (sort-by (fn [el] ((apply juxt sort-keys) (get-document store el))) rel-ids)
@@ -533,16 +583,16 @@
          (->
           store
           ((fn [store]
-             (reduce (fn [store rel] (set-relation-ids store context selection-id doctype (:to rel) (doctype->relation (:to rel)) :_id)) store out)))
+             (reduce (fn [store rel] (walk-relation store context selection-id doctype rel)) store out)))
           ((fn [store]
-             (reduce (fn [store rel] (set-relation-ids store context selection-id doctype (:from rel) :_id (doctype->relation (:to rel)))) store in))))
+             (reduce (fn [store rel] (walk-relation store context selection-id doctype rel)) store in))))
          (concat (rest doctypes) (map :to out) (map :from in))
          (conj visited doctype))))))
 
 ;; TODO: support multiple selection
 (defn select-document
   [store context id selection-id]
-  (let [doctype (keyword (:_type (get-document store id)))]
+  (let [doctype (htype (get-document store id))]
     (-> store
         (assoc-in [:selections selection-id] nil)
         (assoc-in [:selections selection-id doctype] [id])

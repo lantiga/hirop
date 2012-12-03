@@ -2,15 +2,6 @@
   (:use [clojure.set :only [union select difference]])
   (:require [clojure.string :as string]))
 
-(defn- #^String chop
-  "Removes the last character of string, does nothing on a zero-length
-  string. From clojure.contrib."
-  [#^String s]
-  (let [size (count s)]
-    (if (zero? size)
-      s
-      (subs s 0 (dec (count s))))))
-
 ;; https://gist.github.com/1302024
 #_(defn- md5
   "Generate a md5 checksum for the given string"

@@ -600,9 +600,11 @@
 
 (defn unselect
   [store context selection-id doctype]
-  (-> store
-      (assoc-in [:selections selection-id doctype] nil)
-      (propagate-selection context selection-id [doctype])))
+  (if doctype
+    (-> store
+        (assoc-in [:selections selection-id doctype] nil)
+        (propagate-selection context selection-id [doctype]))
+    (assoc-in store [:selections selection-id] nil)))
 
 ;; TODO: support multiple external-ids of the same type
 (defn select-defaults

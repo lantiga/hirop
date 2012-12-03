@@ -10,6 +10,14 @@
     (binding [*hirop-session* session]
       (clj->js (apply f clj-args)))))
 
+(defn- context-f [context-id f & args]
+  (let [clj-args (map js->clj args)
+        clj-args (if context-id
+                   (concat clj-args [:context-id (js->clj context-id)])
+                   clj-args)]
+    (binding [*hirop-session* session]
+      (clj->js (apply f clj-args)))))
+
 (def test-doctypes
   {:Foo {:fields {:id {}}}
    :Bar {:fields {:title {}}}
@@ -38,89 +46,80 @@
   (js-f hirop/contexts))
 
 (defn ^:export doctypes []
-  (js-f hirop/doctypesB))
+  (js-f hirop/doctypes))
 
-(defn ^:export clean-context []
-  (js-f hirop/clean-context))
+(defn ^:export clean-contexts []
+  (js-f hirop/clean-contexts))
 
-(defn ^:export create-context [context-name external-ids meta]
-  (js-f hirop/create-context context-name external-ids meta))
+(defn ^:export clean-context [& [context-id]]
+  (context-f context-id hirop/clean-context))
 
-(defn ^:export new-document [doctype]
-  (js-f hirop/new-document doctype))
+(defn ^:export create-context [context-name external-ids meta & [context-id]]
+  (context-f context-id hirop/create-context context-name external-ids meta))
 
-(defn ^:export new-documents [doctype-map]
-  (js-f hirop/new-documents doctype-map))
+(defn ^:export new-document [doctype & [context-id]]
+  (context-f context-id hirop/new-document doctype))
 
-(defn ^:export get-document [id]
-  (js-f hirop/get-document id))
+(defn ^:export new-documents [doctype-map & [context-id]]
+  (context-f context-id hirop/new-documents doctype-map))
 
-(defn ^:export get-external-documents []
-  (js-f hirop/get-external-documents))
+(defn ^:export get-document [id & [context-id]]
+  (context-f context-id hirop/get-document id))
 
-(defn ^:export get-configurations []
-  (js-f hirop/get-configurations))
+(defn ^:export get-external-documents [& [context-id]]
+  (context-f context-id hirop/get-external-documents))
 
-(defn ^:export get-configuration [doctype]
-  (js-f hirop/get-configuration doctype))
+(defn ^:export get-configurations [& [context-id]]
+  (context-f context-id hirop/get-configurations))
 
-(defn ^:export get-doctype [doctype]
-  (js-f hirop/get-doctype doctype))
+(defn ^:export get-configuration [doctype & [context-id]]
+  (context-f context-id hirop/get-configuration doctype))
 
-(defn ^:export get-baseline [id]
-  (js-f hirop/get-baseline id))
+(defn ^:export get-doctype [doctype & [context-id]]
+  (context-f context-id hirop/get-doctype doctype))
 
-(defn ^:export commit [document]
-  (js-f hirop/commit document))
+(defn ^:export get-baseline [id & [context-id]]
+  (context-f context-id hirop/get-baseline id))
 
-(defn ^:export mcommit [documents]
-  (js-f hirop/mcommit documents))
+(defn ^:export commit [document & [context-id]]
+  (context-f context-id hirop/commit document))
 
-(defn ^:export pull []
-  (js-f hirop/pull))
+(defn ^:export mcommit [documents & [context-id]]
+  (context-f context-id hirop/mcommit documents))
 
-(defn ^:export get-conflicted-ids []
-  (js-f hirop/get-conflicted-ids))
+(defn ^:export pull [& [context-id]]
+  (context-f context-id hirop/pull))
 
-(defn ^:export any-conflicted []
-  (js-f hirop/any-conflicted))
+(defn ^:export get-conflicted-ids [& [context-id]]
+  (context-f context-id hirop/get-conflicted-ids))
 
-(defn ^:export checkout-conflicted []
-  (js-f hirop/checkout-conflicted))
+(defn ^:export any-conflicted [& [context-id]]
+  (context-f context-id hirop/any-conflicted))
 
-(defn ^:export push []
-  (js-f hirop/push))
+(defn ^:export checkout-conflicted [& [context-id]]
+  (context-f context-id hirop/checkout-conflicted))
 
-(defn ^:export save [documents]
-  (js-f hirop/save documents))
+(defn ^:export push [& [context-id]]
+  (context-f context-id hirop/push))
 
-(defn ^:export history [id]
-  (js-f hirop/history id))
+(defn ^:export save [documents & [context-id]]
+  (context-f context-id hirop/save documents))
 
-(defn ^:export checkout
-  ([]
-     (js-f hirop/checkout))
-  ([doctype]
-     (js-f hirop/checkout doctype)))
+(defn ^:export history [id & [context-id]]
+  (context-f context-id hirop/history id))
 
-(defn ^:export get-selected-ids
-  ([selection-id]
-     (js-f hirop/get-selected-ids selection-id))
-  ([selection-id doctype]
-     (js-f hirop/get-selected-ids selection-id doctype)))
+(defn ^:export checkout [& [doctype context-id]]
+  (context-f context-id hirop/checkout :doctype doctype))
 
-(defn ^:export checkout-selected
-  ([selection-id]
-     (js-f hirop/checkout-selected selection-id))
-  ([selection-id doctype]
-     (js-f hirop/checkout-selected selection-id doctype)))
+(defn ^:export get-selected-ids [& [doctype selection-id context-id]]
+  (context-f context-id hirop/get-selected-ids :selection-id selection-id :doctype doctype))
 
-(defn ^:export select
-  ([selection-id]
-     (js-f hirop/select selection-id))
-  ([selection-id id]
-     (js-f hirop/select selection-id id)))
+(defn ^:export checkout-selected [& [doctype selection-id context-id]]
+  (context-f context-id hirop/checkout-selected :selection-id selection-id :doctype doctype))
 
-(defn ^:export unselect [selection-id doctype]
-  (js-f hirop/unselect selection-id doctype))
+(defn ^:export select [& [id selection-id context-id]]
+  (context-f context-id hirop/select :selection-id selection-id :id id))
+
+(defn ^:export unselect [& [doctype selection-id context-id]]
+  (context-f context-id hirop/unselect :selection-id selection-id :doctype doctype))
 

@@ -527,48 +527,50 @@
         (condp = doctype
           (:from rel) [:out (:to rel)]
           (:to rel) [:in (:from rel)])]
-    (reduce
-     (fn [store id]
-       (let [values
-             (condp = direction
-               :out (hrel (get-document store id) rel-doctype)
-               :in (hid (get-document store id)))
-             values (if (coll? values) values (vector values))
-             rel-ids
-             (reduce
-              (fn [out value]
-                (let [rel-ids
-                      (filter
-                       (fn [rel-id]
-                         (let [rel-values
-                               (condp = direction
-                                 :out rel-id
-                                 :in (hrel (get-document store rel-id) doctype))]
-                           (if (coll? rel-values)
-                             (some #(= value %) rel-values)
-                             (= value rel-values))))
-                       (get-ids-of-type store rel-doctype))
-                      rel-ids (if-let [sort-keys (get-in context [:selections selection-id rel-doctype :sort-by])]
-                                (sort-by (fn [el] ((apply juxt sort-keys) (get-document store el))) rel-ids)
-                                rel-ids)
-                      rel-ids (condp = (get-in context [:selections selection-id rel-doctype :select])
-                                :first (if (first rel-ids) [(first rel-ids)] [])
-                                :last (if (last rel-ids) [(last rel-ids)] [])
-                                :all rel-ids
-                                rel-ids)]
-                  (concat out rel-ids)))
-              []
-              values)]
-         (if (some empty? [values rel-ids])
-           store
-           (update-in store [:selections selection-id rel-doctype] #(vec (distinct (concat % rel-ids)))))))
-     store
-     ids)))
+    (if (get-in context [:selections selection-id rel-doctype])
+      (reduce
+       (fn [store id]
+         (let [values
+               (condp = direction
+                 :out (hrel (get-document store id) rel-doctype)
+                 :in (hid (get-document store id)))
+               values (if (coll? values) values (vector values))
+               rel-ids
+               (reduce
+                (fn [out value]
+                  (let [rel-ids
+                        (filter
+                         (fn [rel-id]
+                           (let [rel-values
+                                 (condp = direction
+                                   :out rel-id
+                                   :in (hrel (get-document store rel-id) doctype))]
+                             (if (coll? rel-values)
+                               (some #(= value %) rel-values)
+                               (= value rel-values))))
+                         (get-ids-of-type store rel-doctype))
+                        rel-ids (if-let [sort-keys (get-in context [:selections selection-id rel-doctype :sort-by])]
+                                  (sort-by (fn [el] ((apply juxt sort-keys) (get-document store el))) rel-ids)
+                                  rel-ids)
+                        rel-ids (condp = (get-in context [:selections selection-id rel-doctype :select])
+                                  :first (if (first rel-ids) [(first rel-ids)] [])
+                                  :last (if (last rel-ids) [(last rel-ids)] [])
+                                  :all rel-ids
+                                  rel-ids)]
+                    (concat out rel-ids)))
+                []
+                values)]
+           (if (some empty? [values rel-ids])
+             store
+             (update-in store [:selections selection-id rel-doctype] #(vec (distinct (concat % rel-ids)))))))
+       store
+       ids)
+      store)))
 
 (defn- propagate-selection
   ;; recursively propagate selection backward and forward, starting from id and making sure a document
   ;; type is not selected twice, return store with updated selection
-  ;; TODO: we have hooks in the Javascript version that are called everytime a selection changes.
+  ;; TODO: there were hooks in the Javascript version that are called everytime a selection changes.
   ;; Here we could keep track of who changed at the end of the propagation (better, called once)
   [store context selection-id doctypes]
   (loop [store store

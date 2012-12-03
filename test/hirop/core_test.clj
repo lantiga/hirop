@@ -6,7 +6,8 @@
 (def doctypes
   {:Foo {:fields {:id {}}}
    :Bar {:fields {:title {}}}
-   :Baz {:fields {:title {}}}})
+   :Baz {:fields {:title {}}}
+   :Baq {:fields {:title {}}}})
 
 (def cardinality-test-context
   {:relations
@@ -133,6 +134,54 @@
            {:Baz ["5" "6" "3" "4"], :Bar ["1" "2"], :Foo ["0"]}))
     (is (= (get-in store-first [:selections :test-first])
            {:Baz ["5" "3"], :Bar ["1" "2"], :Foo ["0"]}))))
+
+
+
+(def select-loop-test-context
+  {:relations
+   [{:from :Bar :to :Foo :external true}
+    {:from :Baz :to :Foo :external true}
+    {:from :Baq :to :Bar}
+    {:from :Baq :to :Baz}]
+   :selections
+   {:test
+    {:Bar {:select :all}
+     :Baz {:select :all}
+     :Baq {:select :all}}}})
+
+(defn select-loop-test-fetcher [context-name external-ids boundaries]
+  [{:_hirop {:id "0" :type :Foo}
+    :id "0"}
+   {:_hirop {:id "1" :type :Bar :rels {:Foo "0"}}
+    :title "First"}
+   {:_hirop {:id "2" :type :Bar :rels {:Foo "0"}}
+    :id "Second"}
+   {:_hirop {:id "3" :type :Baz :rels {:Foo "0"}}
+    :title "Third"}
+   {:_hirop {:id "4" :type :Baz :rels {:Foo "0"}}
+    :id "Fourth"}
+   {:_hirop {:id "5" :type :Baq :rels {:Bar "1" :Baz "3"}}
+    :title "Fifth"}
+   {:_hirop {:id "6" :type :Baq :rels {:Bar "1" :Baz "3"}}
+    :id "Sixth"}
+   {:_hirop {:id "7" :type :Baq :rels {:Bar "1" :Baz "3"}}
+    :title "Seventh"}
+   {:_hirop {:id "8" :type :Baq :rels {:Bar "2" :Baz "4"}}
+    :id "Eighth"}
+   {:_hirop {:id "9" :type :Baq :rels {:Bar "2" :Baz "4"}}
+    :title "Nineth"}
+   {:_hirop {:id "10" :type :Baq :rels {:Bar "2" :Baz "4"}}
+    :id "Tenth"}])
+
+(deftest select-loop-test
+  (let [context (create-context :Test select-loop-test-context doctypes {} {:Foo "0"})
+        store (new-store :Test {})
+        store (fetch store context select-loop-test-fetcher)
+        store (merge-remote store)
+        store (select-document store context "1" :test)]
+    (is (= (get-in store [:selections :test])
+           {:Baz ["3"], :Baq ["5" "6" "7"] :Bar ["1"]}))))
+
 
 
 (def select-defaults-test-context

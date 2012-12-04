@@ -48,8 +48,7 @@
         new-id (hirop/get-uuid store)]
     (->
      (hirop/new-document context (keyword doctype))
-     (hirop/assoc-hid new-id)
-     (hirop/assoc-hrev (hirop/zero-rev)))))
+     (hirop/assoc-hid new-id))))
 
 (defn new-documents [doctype-map & {:keys [context-id]}]
   (let [document-map
@@ -63,8 +62,7 @@
                            document
                            (->
                             (hirop/new-document context (keyword doctype))
-                            (hirop/assoc-hid new-id)
-                            (hirop/assoc-hrev (hirop/zero-rev)))]
+                            (hirop/assoc-hid new-id))]
                        (conj res document)))
                    []
                    (repeat n nil))))

@@ -19,6 +19,7 @@
 
 (defn hrev [doc]
   (get-in doc [:_hirop :rev]))
+;;  (or (get-in doc [:_hirop :rev]) 0))
 
 (defn hrels [doc]
   (get-in doc [:_hirop :rels]))
@@ -96,7 +97,7 @@
 
 (defn get-doctype
   [context doctype]
-  (let [configuration (-> context :configurations doctype)
+  (let [configuration (get-in context [:configurations doctype])
         relations (get-relation-fields context doctype "String")]
     (->
      (get-in context [:doctypes doctype])
@@ -153,6 +154,7 @@
       :configurations {}
       :remote #{}
       :local #{}
+      :revisions {}
       :selections {}}))
 
 ;; TODO: for serializing, (assoc store (zipmap (:remote store) (repeat nil)))
@@ -164,29 +166,6 @@
 (defn get-uuid
   [store]
   (str "tmp" (:uuid store) ""))
-
-;; TODO: have a specification for hirop rev (vector clock?). This is too backend-specific.
-(defn- rev-number [rev]
-  (if (string? rev)
-    (if (re-find #"-" rev)
-      ;*CLJSBUILD-REMOVE*;(cljs.reader/read-string (first (string/split rev #"-")))
-      ;*CLJSBUILD-REMOVE*;#_
-      (read-string (first (string/split rev #"-")))
-      ;*CLJSBUILD-REMOVE*;(cljs.reader/read-string rev)
-      ;*CLJSBUILD-REMOVE*;#_
-      (read-string rev))
-    rev))
-
-(defn- compare-revs
-  [rev1 rev2]
-  (compare (rev-number rev1) (rev-number rev2)))
-
-(defn older?
-  [document1 document2]
-  (neg? (compare-revs (hrev document1) (hrev document2))))
-
-(def newer?
-     (complement older?))
 
 (defn- get-id
   [doc-or-id]
@@ -232,25 +211,26 @@
   [store id]
   (= :stored (document-state store id)))
 
-(defn revision
-  ([store id]
-     (hrev ((get-document store id))))
-  ([store id bucket]
-     (hrev ((get-document store id bucket)))))
+(defn revisions
+  [store id]
+  (get-in store [:revisions id]))
 
 (defn add-document
   ([store document]
      (add-document store document :stored))
   ([store document bucket]
-     (assoc-in store [bucket (hid document)] document)))
+     (->
+      store
+      (assoc-in [bucket (hid document)] document)
+      (update-in [:revisions (hid document)] conj (hrev document)))))
 
-(defn add-document-if-newer
+(defn add-document-if-new
   ([store document]
-     (add-document-if-newer store document :stored))
+     (add-document-if-new store document :stored))
   ([store document bucket]
-     (if (newer? document (get-document store (hid document)))
-       (add-document store document bucket)
-       store)))
+     (if (contains? (set (revisions store (hid document))) (hrev document))
+       store
+       (add-document store document bucket))))
 
 (defn add-to-set
   [store document set-name]
@@ -264,10 +244,6 @@
   [store document]
   (add-to-set store document :remote))
 
-(defn zero-rev
-  []
-  nil)
-
 (defn commit
   [store document]
   ;; In a multi-threaded environment, this should be atomic (like all the others, in any case)
@@ -278,13 +254,14 @@
         ;*CLJSBUILD-REMOVE*;(.toISOString (js/Date.))
         ;*CLJSBUILD-REMOVE*;#_
         (.. (java.text.SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:ssZ") (format (java.util.Date.)))
-        document (assoc-hmeta document (assoc (:meta store) :timestamp timestamp))
+        document (assoc-hmeta document
+                              (merge (hmeta document) (:meta store) {:timestamp timestamp}))
         store (if (hid document) store (inc-uuid store))
         document (if (hid document)
                    document
-                   (-> document (assoc-hid (get-uuid store)) (assoc-hrev (zero-rev))))]
+                   (assoc-hid document (get-uuid store)))
+        store (if baseline (add-document store baseline :baseline) store)]
     (-> store
-        ((fn [store] (if baseline (add-document store baseline :baseline) store)))
         (add-document document :starred)
         (add-to-local document))))
 
@@ -301,7 +278,7 @@
     (reduce
      (fn [store document]
        (-> store
-           (add-document-if-newer document :stored)
+           (add-document-if-new document :stored)
            (add-to-remote document)))
      store
      documents)))
@@ -364,11 +341,8 @@
   ;; unconflicted means those fields in stored that are unchanged between baseline and starred
   ;; keep in local only those that are either starred (or locked?) and those that come from remote
   [store]
-  (-> store
-      ((fn [store]
-        (reduce merge-document store (select (partial starred? store) (:remote store)))))
-      ((fn [store]
-        (update-in store [:local] #(union (select (partial starred? store) %) (:remote store)))))))
+  (let [store (reduce merge-document store (select (partial starred? store) (:remote store)))]
+    (update-in store [:local] #(union (select (partial starred? store) %) (:remote store)))))
 
 (defn pull
   [store context fetcher]
@@ -573,12 +547,9 @@
             out (filter #(not (contains? visited (:to %))) (get-relations context doctype :out))
             in (filter #(not (contains? visited (:from %))) (get-relations context doctype :in))]
         (recur
-         (->
-          store
-          ((fn [store]
-             (reduce (fn [store rel] (walk-relation store context selection-id doctype rel)) store out)))
-          ((fn [store]
-             (reduce (fn [store rel] (walk-relation store context selection-id doctype rel)) store in))))
+         (let [store (reduce (fn [store rel] (walk-relation store context selection-id doctype rel)) store out)
+               store (reduce (fn [store rel] (walk-relation store context selection-id doctype rel)) store in)]
+           store)
          (concat (rest doctypes) (map :to out) (map :from in))
          (conj visited doctype))))))
 

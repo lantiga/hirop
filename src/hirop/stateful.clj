@@ -35,8 +35,7 @@
         doctypes (session/get :doctypes)
         context-name (keyword context-name)
         context (get contexts context-name)
-        configurations (get-in contexts [context-name :configurations])
-        context (hirop/create-context context-name context doctypes configurations external-ids)
+        context (hirop/create-context context-name context doctypes external-ids)
         store (hirop/new-store context-name meta)]
     (when (get contexts context-name)
       (session/update!

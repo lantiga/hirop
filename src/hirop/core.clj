@@ -98,14 +98,23 @@
 
 ;; TODO: here we should check that all relations marked as external are specified in external-ids, otherwise fail
 (defn create-context
-  [context-name context doctypes configurations external-ids]
+  [context-name context doctypes external-ids]
   ;; TODO: prototypes
-  (->
-   context
-   (assoc :name context-name)
-   (assoc :doctypes doctypes)
-   (assoc :configurations configurations)
-   (assoc :external-ids external-ids)))
+  (let [prototypes (:prototypes context)
+        selections (:selections context)
+        relationships (:relationships context)
+        ;; for each prototype, explode prototypes
+        ;; for each selection, explode prototypes
+        ;; for each relationship, explode prototypes
+        ]
+    (->
+     context
+     (assoc :name context-name)
+     (assoc :doctypes doctypes)
+     (assoc :prototypes prototypes)
+     (assoc :selections selections)
+     (assoc :relationships relationships)
+     (assoc :external-ids external-ids))))
 
 (defn get-doctype
   [context doctype]

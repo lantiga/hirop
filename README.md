@@ -1,6 +1,6 @@
 # hirop
 
-A Clojure data layer for asynchronous multi-document consistency and related goodness. Alpha stage, expect a stable release by the end of 2012.
+A Clojure library for asynchronous multi-document consistency and related goodness. Alpha stage, expect a stable release by the end of 2012.
 
 ## License
 

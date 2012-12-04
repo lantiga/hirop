@@ -2,29 +2,6 @@
   (:use [clojure.set :only [union select difference]])
   (:require [clojure.string :as string]))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; TODO: implement prototypes
-#_{:prototypes
-   {:Contents [:ContentA :ContentB]
-    :Taggable [:Event :Contents]}
-   ;; :cardinality :one :cardinality :many
-   
-   :relations
-   [{:from :Event :to :Patient :external true :cardinality :one}
-    {:from :Contents :to :Event}]
-   
-   :selections
-   {:default
-    {:Patient {:sort-by [:id] :default :last}
-     :Contents {:sort-by [:title] :default :all}}}}
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; The implementation of prototypes could rely on
-;; expanding prototypes at the create-context level
-;; and reusing existing code immodified (except
-;; for querying a prototype -> doctype map when
-;; querying for a prototype
-
 (defn hid [doc]
   (get-in doc [:_hirop :id]))
 
@@ -76,7 +53,6 @@
   (is-temporary-id? (hid doc)))
 
 (defn- get-relation-fields
-  ;; TODO: prototypes
   [context doctype val]
   (reduce
    (fn [res el]
@@ -96,24 +72,71 @@
   [context]
   (filter #(not (contains? (:external-ids context) %)) (get-external-doctypes context)))
 
+(defn- walk-prototype
+  [context prototype]
+  (loop [prototypes [prototype]
+         doctypes []]
+    (if (empty? prototypes)
+      doctypes
+      (recur
+       (if-let [children (get-in context [:prototypes (first prototypes)])]
+         (conj (rest prototypes) children)
+         (rest prototypes))
+       (if-let [children (get-in context [:prototypes (first prototypes)])]
+         doctypes
+         (conj doctypes (first prototypes)))))))
+
 ;; TODO: here we should check that all relations marked as external are specified in external-ids, otherwise fail
 (defn create-context
   [context-name context doctypes external-ids]
-  ;; TODO: prototypes
   (let [prototypes (:prototypes context)
         selections (:selections context)
-        relationships (:relationships context)
-        ;; for each prototype, explode prototypes
-        ;; for each selection, explode prototypes
-        ;; for each relationship, explode prototypes
-        ]
+        relations (:relations context)
+        prototypes
+        (into {}
+              (map
+               (fn [[k v]]
+                 [k (vec (distinct (flatten (map (partial walk-prototype context) v))))])
+               prototypes))
+        selections
+        (into
+         {}
+         (map
+          (fn [[k selection]]
+            [k
+             (reduce
+              (fn [selection [d s]]
+                (if-let [children (get prototypes d)]
+                  (let [selection (dissoc selection d)]
+                    (reduce (fn [out c] (assoc out c s)) selection children))
+                  selection))
+              selection
+              selection)
+             ])
+          selections))
+        relations
+        (reduce
+         (fn [out r]
+           (let [from-p (or (get prototypes (:from r)) [(:from r)])
+                 to-p (or (get prototypes (:to r)) [(:to r)])]
+             (reduce
+              (fn [out fp]
+                (reduce
+                 (fn [out tp]
+                   (conj out (-> r (assoc :from fp) (assoc :to tp))))
+                 out
+                 to-p))
+              out
+              from-p)))
+         []
+         relations)]
     (->
      context
      (assoc :name context-name)
      (assoc :doctypes doctypes)
      (assoc :prototypes prototypes)
      (assoc :selections selections)
-     (assoc :relationships relationships)
+     (assoc :relations relations)
      (assoc :external-ids external-ids))))
 
 (defn get-doctype
@@ -139,8 +162,6 @@
     :conf nil
     :rels nil}})
 
-;; TODO: here we embed configuration into each document.
-;;      :_conf (md5 (json/generate-string configuration))))))
 (defn new-document
   [context doctype]
   (let [fields (zipmap (keys (get-in context [:doctypes doctype :fields])) (repeat ""))
@@ -161,11 +182,12 @@
      (merge fields))))
 
 (defn new-store
-  ([context-name]
-     (new-store context-name {}))
-  ([context-name meta]
+  ([context]
+     (new-store context {}))
+  ([context meta]
      {:uuid 0
-      :context-name context-name
+      :context-name (:name context)
+      :prototypes (:prototypes context)
       :push-result nil
       :merge-result nil
       :meta meta
@@ -428,7 +450,6 @@
        local
        (difference (set (keys tmp-map)))
        (union (set (vals tmp-map))))))
-   ;; TODO: prototypes
    (assoc :selections
      (into
       {}
@@ -478,27 +499,30 @@
   (let [ret (push-save store saver)]
     (push-post-save store ret)))
 
+(defn- prototype-doctypes
+  [prototypes doctype]
+  (or (get prototypes doctype) [doctype]))
+
 (defn- get-ids-of-type
-  ;; TODO: prototypes
   [store doctype]
-  (select #(= (name doctype) (name (htype (get-document store %)))) (:local store)))
+  (let [doctype (keyword doctype)
+        doctype-set (set (prototype-doctypes (:prototypes store) doctype))]
+    (select #(contains? doctype-set (htype (get-document store %))) (:local store))))
 
 (defn checkout
   ([store]
      (map #(get-document store %) (:local store)))
-  ;; TODO: prototypes
   ([store doctype]
      (map #(get-document store %) (get-ids-of-type store doctype))))
 
 (defn get-selected-ids
   ([store selection-id]
      (get-in store [:selections selection-id]))
-  ;; TODO: prototypes
   ([store selection-id doctype]
-     (get-in store [:selections selection-id doctype])))
+     (let [doctypes (prototype-doctypes (:prototypes store) doctype)]
+       (flatten (map #(get-in store [:selections selection-id %]) doctypes)))))
 
 (defn checkout-selected
-  ;; TODO: prototypes
   ([store selection-id doctype]
      (let [ids (get-selected-ids store selection-id doctype)]
        (if (string? ids)
@@ -512,14 +536,12 @@
 
 ;; TODO: upon loading the context, create the relations graph for efficiency
 (defn- get-relations
-  ;; TODO: prototypes
   [context doctype direction]
   (condp = direction
       :out (filter (fn [rel] (= doctype (rel :from))) (context :relations))
       :in (filter (fn [rel] (= doctype (rel :to))) (context :relations))))
 
 (defn- walk-relation
-  ;; TODO: prototypes
   [store context selection-id doctype rel]
   (let [ids (get-in store [:selections selection-id doctype])
         [direction rel-doctype]
@@ -571,7 +593,6 @@
   ;; type is not selected twice, return store with updated selection
   ;; TODO: there were hooks in the Javascript version that are called everytime a selection changes.
   ;; Here we could keep track of who changed at the end of the propagation (better, called once)
-    ;; TODO: prototypes
   [store context selection-id doctypes]
   (loop [store store
          doctypes doctypes
@@ -598,7 +619,6 @@
         (propagate-selection context selection-id [doctype]))))
 
 (defn unselect
-  ;; TODO: prototypes
   [store context selection-id doctype]
   (if doctype
     (-> store

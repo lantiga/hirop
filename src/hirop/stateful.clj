@@ -36,7 +36,7 @@
         context-name (keyword context-name)
         context (get contexts context-name)
         context (hirop/create-context context-name context doctypes external-ids)
-        store (hirop/new-store context-name meta)]
+        store (hirop/new-store context meta)]
     (when (get contexts context-name)
       (session/update!
        (fn [session]

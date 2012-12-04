@@ -31,8 +31,8 @@
     :title "Third"}])
 
 (deftest cardinality-test
-  (let [context (create-context :Test cardinality-test-context doctypes {} {:Foo "0"})
-        store (new-store :Test {})
+  (let [context (create-context :Test cardinality-test-context doctypes {:Foo "0"})
+        store (new-store context {})
         store (fetch store context cardinality-test-fetcher)
         store (merge-remote store)
         store-baz (select-document store context "3" :test)
@@ -42,6 +42,46 @@
     (is (= (get-in store-foo [:selections :test])
            {:Baz ["3"], :Bar ["1" "2"], :Foo ["0"]}))))
 
+
+(def prototype-test-context
+  {:prototypes
+   {:Foobar [:Foo :Bar]
+    :Foobaz [:Foo :Baz]
+    :Foobarbaz [:Foobar :Foobaz]
+    :Barbaz [:Bar :Baz]}
+   :relations
+   [{:from :Barbaz :to :Foo}]
+   :selections
+   {:test
+    {:Foo {:sort-by [:id] :select :last}
+     :Barbaz {:select :all}}}
+   :configurations {}})
+
+(defn prototype-test-fetcher [context-name external-ids boundaries]
+  [{:_hirop {:id "0" :type :Foo}
+    :id "0"}
+   {:_hirop {:id "1" :type :Bar :rels {:Foo "0"}}
+    :title "First"}
+   {:_hirop {:id "2" :type :Bar :rels {:Foo "0"}}
+    :title "Second"}
+   {:_hirop {:id "3" :type :Baz :rels {:Foo "0"}}
+    :title "Third"}
+   {:_hirop {:id "4" :type :Baz :rels {:Foo "0"}}
+    :title "Fourth"}])
+
+(deftest prototype-test
+  (let [context (create-context :Test prototype-test-context doctypes {:Foo "0"})
+        store (new-store context {})
+        store (fetch store context prototype-test-fetcher)
+        store (merge-remote store)
+        store-baz (select-document store context "3" :test)
+        store-foo (select-document store context "0" :test)]
+    (is (empty?
+         (filter #(= :Foo (htype %)) (checkout-selected store-baz :test :Barbaz))))
+    (is (= (get-in store-baz [:selections :test])
+           {:Baz ["3"], :Bar ["1" "2"], :Foo ["0"]}))
+    (is (= (get-in store-foo [:selections :test])
+           {:Baz ["3" "4"], :Bar ["1" "2"], :Foo ["0"]}))))
 
 
 (def remap-test-context
@@ -63,8 +103,8 @@
   {:result :success :remap {"tmp1" "1" "tmp2" "2" "tmp3" "3"}})
 
 (deftest remap-test
-  (let [context (create-context :Test remap-test-context doctypes {} {:Foo "0"})
-        store (new-store :Test {})
+  (let [context (create-context :Test remap-test-context doctypes {:Foo "0"})
+        store (new-store context {})
         store (fetch store context remap-test-fetcher)
         store (merge-remote store)
         store (inc-uuid store)
@@ -85,7 +125,6 @@
            "3"))
     (is (= (:Bar_ (first (checkout store :Baz)))
            ["1" "2"]))))
-
 
 
 
@@ -121,8 +160,8 @@
     :id "Sixth"}])
 
 (deftest select-all-test
-  (let [context (create-context :Test select-all-test-context doctypes {} {:Foo "0"})
-        store (new-store :Test {})
+  (let [context (create-context :Test select-all-test-context doctypes {:Foo "0"})
+        store (new-store context {})
         store (fetch store context select-all-test-fetcher)
         store (merge-remote store)
         store-all (select-document store context "0" :test-all)
@@ -174,8 +213,8 @@
     :id "Tenth"}])
 
 (deftest select-loop-test
-  (let [context (create-context :Test select-loop-test-context doctypes {} {:Foo "0"})
-        store (new-store :Test {})
+  (let [context (create-context :Test select-loop-test-context doctypes {:Foo "0"})
+        store (new-store context {})
         store (fetch store context select-loop-test-fetcher)
         store (merge-remote store)
         store (select-document store context "1" :test)]
@@ -200,8 +239,8 @@
     :id "0"}])
 
 (deftest select-defaults-test
-  (let [context (create-context :Test select-defaults-test-context doctypes {} {:Foo "0"})
-        store (new-store :Test {})
+  (let [context (create-context :Test select-defaults-test-context doctypes {:Foo "0"})
+        store (new-store context {})
         store (fetch store context select-defaults-test-fetcher)
         store (merge-remote store)
         store (select-defaults store context :test-defaults)
@@ -237,8 +276,8 @@
   {:result :success :remap {}})
 
 (deftest remap-test
-  (let [context (create-context :Test remap-test-context doctypes {} {:Foo "0"})
-        store (new-store :Test {})
+  (let [context (create-context :Test remap-test-context doctypes {:Foo "0"})
+        store (new-store context {})
         store (fetch store context conflict-test-fetcher-1)
         store (merge-remote store)
         store (inc-uuid store)

@@ -25,24 +25,11 @@
 ;; for querying a prototype -> doctype map when
 ;; querying for a prototype
 
-;; https://gist.github.com/1302024
-#_(defn- md5
-  "Generate a md5 checksum for the given string"
-  [token]
-  (let [hash-bytes
-         (doto (java.security.MessageDigest/getInstance "MD5")
-               (.reset)
-               (.update (.getBytes token)))]
-       (.toString
-         (new java.math.BigInteger 1 (.digest hash-bytes)) ; Positive and the size of the number
-         16))) ; Use base16 i.e. hex
-
 (defn hid [doc]
   (get-in doc [:_hirop :id]))
 
 (defn hrev [doc]
   (get-in doc [:_hirop :rev]))
-;;  (or (get-in doc [:_hirop :rev]) 0))
 
 (defn hrels [doc]
   (get-in doc [:_hirop :rels]))

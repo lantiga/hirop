@@ -2,6 +2,29 @@
   (:use [clojure.set :only [union select difference]])
   (:require [clojure.string :as string]))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; TODO: implement prototypes
+#_{:prototypes
+   {:Contents [:ContentA :ContentB]
+    :Taggable [:Event :Contents]}
+   ;; :cardinality :one :cardinality :many
+   
+   :relations
+   [{:from :Event :to :Patient :external true :cardinality :one}
+    {:from :Contents :to :Event}]
+   
+   :selections
+   {:default
+    {:Patient {:sort-by [:id] :default :last}
+     :Contents {:sort-by [:title] :default :all}}}}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; The implementation of prototypes could rely on
+;; expanding prototypes at the create-context level
+;; and reusing existing code immodified (except
+;; for querying a prototype -> doctype map when
+;; querying for a prototype
+
 ;; https://gist.github.com/1302024
 #_(defn- md5
   "Generate a md5 checksum for the given string"
@@ -66,6 +89,7 @@
   (is-temporary-id? (hid doc)))
 
 (defn- get-relation-fields
+  ;; TODO: prototypes
   [context doctype val]
   (reduce
    (fn [res el]
@@ -88,6 +112,7 @@
 ;; TODO: here we should check that all relations marked as external are specified in external-ids, otherwise fail
 (defn create-context
   [context-name context doctypes configurations external-ids]
+  ;; TODO: prototypes
   (->
    context
    (assoc :name context-name)
@@ -269,6 +294,11 @@
   [store documents]
   (reduce (fn [store document] (commit store document)) store documents))
 
+;; TODO: eventual consistent backends: there could be more than one document for each id
+;; They should all be kept in remote
+;; We could promote one document (at random - or consistently - or by ownership)
+;; and let merge take care of this (i.e. generate conflicts as needed). Or we could store
+;; all documents in a vector. Or in a special map. In any case, a checkout should succeed. 
 (defn fetch
   [store context fetcher]
   (let [context-name (:name context)
@@ -308,7 +338,7 @@
    #(htype (get % :stored))
    (map
     (fn [id]
-      ;; TODO: make stored be a list (eventual consistency)s
+      ;; TODO: make stored be a list (eventual consistency)
       {:stored (get-document store id :stored)
        :starred (get-document store id :starred)
        :baseline (get-document store id :baseline)})
@@ -316,6 +346,7 @@
 
 (defn merge-document
   ;; In case of fast-forward, we advance :rev, otherwise we don't.
+  ;; TODO: make merging strategy a multimethod
   [store id]
   (let [starred (get-document store id :starred)
         stored (get-document store id :stored)
@@ -401,6 +432,7 @@
        local
        (difference (set (keys tmp-map)))
        (union (set (vals tmp-map))))))
+   ;; TODO: prototypes
    (assoc :selections
      (into
       {}
@@ -451,22 +483,26 @@
     (push-post-save store ret)))
 
 (defn- get-ids-of-type
+  ;; TODO: prototypes
   [store doctype]
   (select #(= (name doctype) (name (htype (get-document store %)))) (:local store)))
 
 (defn checkout
   ([store]
      (map #(get-document store %) (:local store)))
+  ;; TODO: prototypes
   ([store doctype]
      (map #(get-document store %) (get-ids-of-type store doctype))))
 
 (defn get-selected-ids
   ([store selection-id]
      (get-in store [:selections selection-id]))
+  ;; TODO: prototypes
   ([store selection-id doctype]
      (get-in store [:selections selection-id doctype])))
 
 (defn checkout-selected
+  ;; TODO: prototypes
   ([store selection-id doctype]
      (let [ids (get-selected-ids store selection-id doctype)]
        (if (string? ids)
@@ -480,12 +516,14 @@
 
 ;; TODO: upon loading the context, create the relations graph for efficiency
 (defn- get-relations
+  ;; TODO: prototypes
   [context doctype direction]
   (condp = direction
       :out (filter (fn [rel] (= doctype (rel :from))) (context :relations))
       :in (filter (fn [rel] (= doctype (rel :to))) (context :relations))))
 
 (defn- walk-relation
+  ;; TODO: prototypes
   [store context selection-id doctype rel]
   (let [ids (get-in store [:selections selection-id doctype])
         [direction rel-doctype]
@@ -537,6 +575,7 @@
   ;; type is not selected twice, return store with updated selection
   ;; TODO: there were hooks in the Javascript version that are called everytime a selection changes.
   ;; Here we could keep track of who changed at the end of the propagation (better, called once)
+    ;; TODO: prototypes
   [store context selection-id doctypes]
   (loop [store store
          doctypes doctypes
@@ -563,6 +602,7 @@
         (propagate-selection context selection-id [doctype]))))
 
 (defn unselect
+  ;; TODO: prototypes
   [store context selection-id doctype]
   (if doctype
     (-> store

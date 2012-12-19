@@ -20,7 +20,7 @@
      :Baz {:select :all}}}
    :configurations {}})
 
-(defn cardinality-test-fetcher [context-name external-ids boundaries]
+(defn cardinality-test-fetcher [_]
   [{:_hirop {:id "0" :type :Foo}
     :id "0"}
    {:_hirop {:id "1" :type :Bar :rels {:Foo "0"}}
@@ -57,7 +57,7 @@
      :Barbaz {:select :all}}}
    :configurations {}})
 
-(defn prototype-test-fetcher [context-name external-ids boundaries]
+(defn prototype-test-fetcher [_]
   [{:_hirop {:id "0" :type :Foo}
     :id "0"}
    {:_hirop {:id "1" :type :Bar :rels {:Foo "0"}}
@@ -95,11 +95,11 @@
      :Baz {:select :all}}}
    :configurations {}})
 
-(defn remap-test-fetcher [context-name external-ids boundaries]
+(defn remap-test-fetcher [_]
   [{:_hirop {:id "0" :type :Foo}
     :id "0"}])
 
-(defn remap-test-saver [docs context-name]
+(defn remap-test-saver [_ _]
   {:result :success :remap {"tmp1" "1" "tmp2" "2" "tmp3" "3"}})
 
 (deftest remap-test
@@ -143,7 +143,7 @@
      :Baz {:select :first}}}
    :configurations {}})
 
-(defn select-all-test-fetcher [context-name external-ids boundaries]
+(defn select-all-test-fetcher [_]
   [{:_hirop {:id "0" :type :Foo}
     :id "0"}
    {:_hirop {:id "1" :type :Bar :rels {:Foo "0"}}
@@ -188,7 +188,7 @@
      :Baz {:select :all}
      :Baq {:select :all}}}})
 
-(defn select-loop-test-fetcher [context-name external-ids boundaries]
+(defn select-loop-test-fetcher [_]
   [{:_hirop {:id "0" :type :Foo}
     :id "0"}
    {:_hirop {:id "1" :type :Bar :rels {:Foo "0"}}
@@ -234,7 +234,7 @@
      :Baz {:select :first}}}
    :configurations {}})
 
-(defn select-defaults-test-fetcher [context-name external-ids boundaries]
+(defn select-defaults-test-fetcher [_]
   [{:_hirop {:id "0" :type :Foo}
     :id "0"}])
 
@@ -253,26 +253,26 @@
   {:relations []
    :selections {}})
 
-(defn conflict-test-fetcher-1 [context-name external-ids boundaries]
+(defn conflict-test-fetcher-1 [_]
   [{:_hirop {:id "0" :type :Foo :meta {}}
     :id "0"}])
 
-(defn conflict-test-fetcher-2 [context-name external-ids boundaries]
+(defn conflict-test-fetcher-2 [_]
   [{:_hirop {:id "0" :type :Foo :meta {}}
     :id "0"}
    {:_hirop {:id "1" :type :Bar :meta {} :rels {:Foo "0"}}
     :title ""}])
 
-(defn conflict-test-fetcher-3 [context-name external-ids boundaries]
+(defn conflict-test-fetcher-3 [_]
   [{:_hirop {:id "0" :type :Foo :meta {}}
     :id "0"}
    {:_hirop {:id "1" :type :Bar :meta {} :rels {:Foo "0"}}
     :title "BAR"}])
 
-(defn conflict-test-saver-1 [docs context-name]
+(defn conflict-test-saver-1 [_ _]
   {:result :success :remap {"tmp1" "1"}})
 
-(defn conflict-test-saver-2 [docs context-name]
+(defn conflict-test-saver-2 [_ _]
   {:result :success :remap {}})
 
 (deftest remap-test
@@ -284,13 +284,13 @@
         id0 (get-uuid store)
         bar (assoc (new-document context :Bar) :_hirop {:id id0 :rels {:Foo "0"}})
         store (commit store bar)
-        store (push store conflict-test-saver-1)
+        store (push store context conflict-test-saver-1)
         store (fetch store context conflict-test-fetcher-2)
         store (merge-remote store)
         bar (first (checkout store :Bar))
         bar (assoc bar :title "BAR")
         store (commit store bar)
-        store (push store conflict-test-saver-2)
+        store (push store context conflict-test-saver-2)
         store (fetch store context conflict-test-fetcher-3)
         store (merge-remote store)]
     (is (empty? (checkout-conflicted store)))))

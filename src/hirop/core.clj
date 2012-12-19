@@ -319,10 +319,7 @@
 ;; all documents in a vector. Or in a special map. In any case, a checkout should succeed. 
 (defn fetch
   [store context fetcher]
-  (let [context-name (:name context)
-        external-ids (:external-ids context)
-        boundaries (get-free-external-doctypes context)
-        documents (fetcher context-name external-ids boundaries)]
+  (let [documents (fetcher context)]
     (reduce
      (fn [store document]
        (-> store
@@ -475,10 +472,10 @@
        (:selections store))))))
 
 (defn push-save
-  [store saver]
-  (let [starred (:starred store)]
-    {:save-ret (saver (vals starred) (:context-name store))
-     :starred starred}))
+  [store context saver]
+  (let [save-ret (saver store context)]
+    {:save-ret save-ret
+     :starred (:starred store)}))
 
 (defn push-post-save
   ;; this is decoupled from push to provide a side-effect free option
@@ -495,8 +492,8 @@
 (defn push
   ;; save, upon success unstar, otherwise return store unmodified
   ;; leave it to a higher order function to reiterate
-  [store saver]
-  (let [ret (push-save store saver)]
+  [store context saver]
+  (let [ret (push-save store context saver)]
     (push-post-save store ret)))
 
 (defn- prototype-doctypes

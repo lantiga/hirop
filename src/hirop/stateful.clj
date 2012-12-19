@@ -113,8 +113,9 @@
 
 (defn push [& {:keys [context-id]}]
   ;; TODO: see comments for pull, same thing. Save might take a long time (it might even throw an exception).
-  (let [store (session/get-in [context-id :store])
-        save-info (hirop/push-save store (partial backend/save (session/get :backend)))]
+  (let [context (session/get-in [context-id :context])
+        store (session/get-in [context-id :store])
+        save-info (hirop/push-save store context (partial backend/save (session/get :backend)))]
     ;; With this version, save is not executed in an atom and only the data that has been saved is unstarred. 
     ;; Not sure what about re-starring, think about it (TODO).
     (session/update-in! [context-id :store] hirop/push-post-save save-info))
@@ -123,8 +124,9 @@
   {:result (hirop/get-push-result (session/get-in [context-id :store]))})
 
 (defn save [documents & {:keys [context-id]}]
-  (let [store (session/update-in! [context-id :store] hirop/mcommit documents) 
-        save-info (hirop/push-save store (partial backend/save (session/get :backend)))]
+  (let [context (session/get-in [context-id :context])
+        store (session/update-in! [context-id :store] hirop/mcommit documents) 
+        save-info (hirop/push-save store context (partial backend/save (session/get :backend)))]
     (session/update-in! [context-id :store] hirop/push-post-save save-info))
   {:result (hirop/get-push-result (session/get-in [context-id :store]))})
 

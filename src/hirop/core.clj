@@ -366,7 +366,7 @@
   (let [starred (get-document store id :starred)
         stored (get-document store id :stored)
         baseline (get-document store id :baseline)]
-    (if starred
+    (if (and starred (not= (hrev baseline) (hrev stored)))
       (let [merged
             (reduce
              (fn [document key]

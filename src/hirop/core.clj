@@ -29,8 +29,14 @@
 (defn assoc-hrev [doc rev]
   (assoc-in doc [:_hirop :rev] rev))
 
+(defn dissoc-hrev [doc]
+  (update-in doc [:_hirop] #(dissoc % :rev)))
+
 (defn assoc-hrels [doc rels]
   (assoc-in doc [:_hirop :rels] rels))
+
+(defn dissoc-hrels [doc]
+  (update-in doc [:_hirop] #(dissoc % :rels)))
 
 (defn assoc-hrel [doc doctype rel-id]
   (assoc-in doc [:_hirop :rels doctype] rel-id))

@@ -50,9 +50,11 @@
 (defn assoc-hconf [doc conf]
   (assoc-in doc [:_hirop :conf] conf))
 
+(def tmp-prefix "tmp")
+
 (defn is-temporary-id?
   [id]
-  (string? (re-find #"^tmp" id)))
+  (string? (re-find (re-pattern (str "^" tmp-prefix) id))))
 
 (defn has-temporary-id?
   [doc]
@@ -79,71 +81,96 @@
   (filter #(not (contains? (:external-ids context) %)) (get-external-doctypes context)))
 
 (defn- walk-prototype
-  [context prototype]
-  (loop [prototypes [prototype]
+  [prototypes prototype]
+  (loop [prototype-list [prototype]
          doctypes []]
-    (if (empty? prototypes)
+    (if (empty? prototype-list)
       doctypes
       (recur
-       (if-let [children (get-in context [:prototypes (first prototypes)])]
-         (conj (rest prototypes) children)
-         (rest prototypes))
-       (if-let [children (get-in context [:prototypes (first prototypes)])]
+       (if-let [children (get prototypes [(first prototype-list)])]
+         (conj (rest prototype-list) children)
+         (rest prototype-list))
+       (if-let [children (get prototypes [(first prototype-list)])]
          doctypes
-         (conj doctypes (first prototypes)))))))
+         (conj doctypes (first prototype-list)))))))
 
+(defn- compile-prototypes
+  [prototypes]
+  (into {}
+        (map
+         (fn [[k v]]
+           [k (vec (distinct (flatten (map (partial walk-prototype prototypes) v))))])
+         prototypes)))
+
+(defn- compile-selections
+  [selections prototypes]
+  (into
+   {}
+   (map
+    (fn [[k selection]]
+      [k
+       (reduce
+        (fn [selection [d s]]
+          (if-let [children (get prototypes d)]
+            (let [selection (dissoc selection d)]
+              (reduce (fn [out c] (assoc out c s)) selection children))
+            selection))
+        selection
+        selection)
+       ])
+    selections)))
+
+(defn- compile-relations
+  [relations prototypes]
+  (reduce
+   (fn [out r]
+     (let [from-p (or (get prototypes (:from r)) [(:from r)])
+           to-p (or (get prototypes (:to r)) [(:to r)])]
+       (reduce
+        (fn [out fp]
+          (reduce
+           (fn [out tp]
+             (conj out (-> r (assoc :from fp) (assoc :to tp))))
+           out
+           to-p))
+        out
+        from-p)))
+   []
+   relations))
+
+(defn- document-store
+  []
+  {:uuid 0
+   :push-result nil
+   :merge-result nil
+   :stored {}
+   :starred {}
+   :baseline {}
+   :configurations {}
+   :remote #{}
+   :local #{}
+   :revisions {}
+   :selected {}})
+  
 ;; TODO: here we should check that all relations marked as external are specified in external-ids, otherwise fail
+;; Also, we should only include doctypes that are in use in the context (in relationships, selections or prototypes) 
 (defn create-context
-  [context-name context doctypes external-ids]
-  (let [prototypes (:prototypes context)
-        selections (:selections context)
-        relations (:relations context)
-        prototypes
-        (into {}
-              (map
-               (fn [[k v]]
-                 [k (vec (distinct (flatten (map (partial walk-prototype context) v))))])
-               prototypes))
-        selections
-        (into
-         {}
-         (map
-          (fn [[k selection]]
-            [k
-             (reduce
-              (fn [selection [d s]]
-                (if-let [children (get prototypes d)]
-                  (let [selection (dissoc selection d)]
-                    (reduce (fn [out c] (assoc out c s)) selection children))
-                  selection))
-              selection
-              selection)
-             ])
-          selections))
-        relations
-        (reduce
-         (fn [out r]
-           (let [from-p (or (get prototypes (:from r)) [(:from r)])
-                 to-p (or (get prototypes (:to r)) [(:to r)])]
-             (reduce
-              (fn [out fp]
-                (reduce
-                 (fn [out tp]
-                   (conj out (-> r (assoc :from fp) (assoc :to tp))))
-                 out
-                 to-p))
-              out
-              from-p)))
-         []
-         relations)]
-    (->
-     context
-     (assoc :name context-name)
-     (assoc :doctypes doctypes)
-     (assoc :prototypes prototypes)
-     (assoc :selections selections)
-     (assoc :relations relations)
-     (assoc :external-ids external-ids))))
+  ([context-name context doctypes external-ids]
+     (create-context context-name context doctypes external-ids {}))
+  ([context-name context doctypes external-ids meta]
+     (let [prototypes (compile-prototypes (:prototypes context))
+           selections (compile-selections (:selections context) prototypes)
+           relations (compile-relations (:relations context) prototypes)]
+       (->
+        context
+        (assoc :name context-name)
+        (assoc :doctypes doctypes)
+        (assoc :prototypes prototypes)
+        (assoc :selections selections)
+        (assoc :relations relations)
+        (assoc :external-ids external-ids)
+        (assoc :meta meta)
+        (merge (document-store))))))
 
 (defn get-doctype
   [context doctype]
@@ -187,34 +214,18 @@
      (assoc-hrels relations)
      (merge fields))))
 
-(defn new-store
-  ([context]
-     (new-store context {}))
-  ([context meta]
-     {:uuid 0
-      :context-name (:name context)
-      :prototypes (:prototypes context)
-      :push-result nil
-      :merge-result nil
-      :meta meta
-      :stored {}
-      :starred {}
-      :baseline {}
-      :configurations {}
-      :remote #{}
-      :local #{}
-      :revisions {}
-      :selections {}}))
-
 ;; TODO: for serializing, (assoc store (zipmap (:remote store) (repeat nil)))
 
+;; TODO: avoid incremental uuids. Use random uuids, so getting a new
+;; doc is idempotent.
+;; (defn uuid [] (str (java.util.UUID/randomUUID)))
 (defn inc-uuid
-  [store]
-  (update-in store [:uuid] inc))
+  [context]
+  (update-in context [:uuid] inc))
 
 (defn get-uuid
-  [store]
-  (str "tmp" (:uuid store) ""))
+  [context]
+  (str tmp-prefix (:uuid context) ""))
 
 (defn- get-id
   [doc-or-id]
@@ -223,100 +234,100 @@
     (hid doc-or-id)))
 
 (defn get-document
-  ([store id]
-     (let [starred (get-in store [:starred id])
-           stored (get-in store [:stored id])]
+  ([context id]
+     (let [starred (get-in context [:starred id])
+           stored (get-in context [:stored id])]
        (cond
         starred starred
         :else stored)))
-  ([store id bucket]
-     (get-in store [bucket id])))
+  ([context id bucket]
+     (get-in context [bucket id])))
 
 (defn get-stored
-  [store id]
-  (get-in store [:stored id]))
+  [context id]
+  (get-in context [:stored id]))
 
 (defn get-baseline
-  [store id]
-  (let [baseline (get-in store [:baseline id])
-        stored (get-in store [:stored id])]
+  [context id]
+  (let [baseline (get-in context [:baseline id])
+        stored (get-in context [:stored id])]
     (cond
      baseline baseline
      :else stored)))
 
 (defn document-state
-  [store id]
-  (let [starred (get-in store [:starred id])
-        stored (get-in store [:stored id])]
+  [context id]
+  (let [starred (get-in context [:starred id])
+        stored (get-in context [:stored id])]
     (cond
      starred :starred
      :else :stored)))
 
 (defn starred?
-  [store id]
-  (= :starred (document-state store id)))
+  [context id]
+  (= :starred (document-state context id)))
 
 (defn stored?
-  [store id]
-  (= :stored (document-state store id)))
+  [context id]
+  (= :stored (document-state context id)))
 
 (defn revisions
-  [store id]
-  (get-in store [:revisions id]))
+  [context id]
+  (get-in context [:revisions id]))
 
 (defn add-document
-  ([store document]
-     (add-document store document :stored))
-  ([store document bucket]
+  ([context document]
+     (add-document context document :stored))
+  ([context document bucket]
      (->
-      store
+      context
       (assoc-in [bucket (hid document)] document)
       (update-in [:revisions (hid document)] conj (hrev document)))))
 
 (defn add-document-if-new
-  ([store document]
-     (add-document-if-new store document :stored))
-  ([store document bucket]
-     (if (contains? (set (revisions store (hid document))) (hrev document))
-       store
-       (add-document store document bucket))))
+  ([context document]
+     (add-document-if-new context document :stored))
+  ([context document bucket]
+     (if (contains? (set (revisions context (hid document))) (hrev document))
+       context
+       (add-document context document bucket))))
 
 (defn add-to-set
-  [store document set-name]
-  (update-in store [set-name] #(conj % (hid document))))
+  [context document set-name]
+  (update-in context [set-name] #(conj % (hid document))))
 
 (defn add-to-local
-  [store document]
-  (add-to-set store document :local))
+  [context document]
+  (add-to-set context document :local))
 
 (defn add-to-remote
-  [store document]
-  (add-to-set store document :remote))
+  [context document]
+  (add-to-set context document :remote))
 
 (defn commit
-  [store document]
+  [context document]
   ;; In a multi-threaded environment, this should be atomic (like all the others, in any case)
   ;; Here baseline could already be at a greater revision number compared to the committed document
   ;; had the latter been checked out some time before the commit.
-  (let [baseline (get-stored store (hid document))
+  (let [baseline (get-stored context (hid document))
         timestamp
         ;*CLJSBUILD-REMOVE*;(.toISOString (js/Date.))
         ;*CLJSBUILD-REMOVE*;#_
         (.. (java.text.SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:ssZ") (format (java.util.Date.)))
         document (assoc-hmeta document
-                              (merge (hmeta document) (:meta store) {:timestamp timestamp}))
-        store (if (hid document) store (inc-uuid store))
+                              (merge (hmeta document) (:meta context) {:timestamp timestamp}))
+        context (if (hid document) context (inc-uuid context))
         document (if (hid document)
                    document
-                   (assoc-hid document (get-uuid store)))
-        store (if baseline (add-document store baseline :baseline) store)]
-    (-> store
+                   (assoc-hid document (get-uuid context)))
+        context (if baseline (add-document context baseline :baseline) context)]
+    (-> context
         (add-document document :starred)
         (add-to-local document))))
 
 (defn mcommit
-  [store documents]
-  (reduce (fn [store document] (commit store document)) store documents))
+  [context documents]
+  (reduce (fn [context document] (commit context document)) context documents))
 
 ;; TODO: eventual consistent backends: there could be more than one document for each id
 ;; They should all be kept in remote
@@ -324,21 +335,21 @@
 ;; and let merge take care of this (i.e. generate conflicts as needed). Or we could store
 ;; all documents in a vector. Or in a special map. In any case, a checkout should succeed. 
 (defn fetch
-  [store context fetcher]
+  [context fetcher]
   (let [documents (fetcher context)]
     (reduce
-     (fn [store document]
-       (-> store
+     (fn [context document]
+       (-> context
            (add-document-if-new document :stored)
            (add-to-remote document)))
-     store
+     context
      documents)))
 
 (defn conflicted?
-  [store id]
-  (let [starred (dissoc (get-document store id :starred) :_hirop)
-        stored (dissoc (get-document store id :stored) :_hirop)
-        baseline (dissoc (get-document store id :baseline) :_hirop)]
+  [context id]
+  (let [starred (dissoc (get-document context id :starred) :_hirop)
+        stored (dissoc (get-document context id :stored) :_hirop)
+        baseline (dissoc (get-document context id :baseline) :_hirop)]
     (if (nil? starred)
       false
       (and
@@ -346,32 +357,32 @@
        (not= stored baseline)))))
 
 (defn get-conflicted-ids
-  [store]
-  (filter (partial conflicted? store) (:local store)))
+  [context]
+  (filter (partial conflicted? context) (:local context)))
 
 (defn any-conflicted?
-  [store]
-  (not (empty? (get-conflicted-ids store))))
+  [context]
+  (not (empty? (get-conflicted-ids context))))
 
 (defn checkout-conflicted
-  [store]
+  [context]
   (group-by
    #(htype (get % :stored))
    (map
     (fn [id]
       ;; TODO: make stored be a list (eventual consistency)
-      {:stored (get-document store id :stored)
-       :starred (get-document store id :starred)
-       :baseline (get-document store id :baseline)})
-   (get-conflicted-ids store))))
+      {:stored (get-document context id :stored)
+       :starred (get-document context id :starred)
+       :baseline (get-document context id :baseline)})
+   (get-conflicted-ids context))))
 
 (defn merge-document
   ;; In case of fast-forward, we advance :rev, otherwise we don't.
   ;; TODO: make merging strategy a multimethod
-  [store id]
-  (let [starred (get-document store id :starred)
-        stored (get-document store id :stored)
-        baseline (get-document store id :baseline)]
+  [context id]
+  (let [starred (get-document context id :starred)
+        stored (get-document context id :stored)
+        baseline (get-document context id :baseline)]
     (if (and starred (not= (hrev baseline) (hrev stored)))
       (let [merged
             (reduce
@@ -380,11 +391,11 @@
              starred
              (keys (dissoc stored :_hirop)))
             ;; TODO: consider merging more of _hirop than just rev
-            merged (if (conflicted? store id)
+            merged (if (conflicted? context id)
                      merged
                      (assoc-hrev merged (hrev stored)))]
-        (add-document store merged :starred))
-      store)))
+        (add-document context merged :starred))
+      context)))
 
 (defn merge-remote
   ;; for every remote, merge into local
@@ -392,41 +403,41 @@
   ;; for every remote that is starred, merge unconflicted fields from :stored to :starred
   ;; unconflicted means those fields in stored that are unchanged between baseline and starred
   ;; keep in local only those that are either starred (or locked?) and those that come from remote
-  [store]
-  (let [store (reduce merge-document store (select (partial starred? store) (:remote store)))]
-    (update-in store [:local] #(union (select (partial starred? store) %) (:remote store)))))
+  [context]
+  (let [context (reduce merge-document context (select (partial starred? context) (:remote context)))]
+    (update-in context [:local] #(union (select (partial starred? context) %) (:remote context)))))
 
 (defn pull
-  [store context fetcher]
-  (-> store (fetch context fetcher) merge-remote))
+  [context fetcher]
+  (-> context (fetch context fetcher) merge-remote))
 
 (defn- unstar
   ;; move starred to stored (really?), remove baselines (locked?)
-  ([store]
-    (unstar store (keys (:starred store))))
-  ([store starred-ids]
-     (-> store
-         (update-in [:stored] #(merge % (select-keys (:starred store) starred-ids)))
+  ([context]
+    (unstar context (keys (:starred context))))
+  ([context starred-ids]
+     (-> context
+         (update-in [:stored] #(merge % (select-keys (:starred context) starred-ids)))
          ;; this only removes the starred and baselines relative to the provided starred
          (update-in [:starred] #(apply dissoc % starred-ids))
          (assoc [:baseline] #(apply dissoc % starred-ids)))))
 
 (defn- set-merge-result
-  [store result]
-  (assoc store :merge-result result))
+  [context result]
+  (assoc context :merge-result result))
 
 (defn- set-push-result
-  [store result]
-  (assoc store :push-result result))
+  [context result]
+  (assoc context :push-result result))
 
 (defn get-push-result
-  [store]
-  (:push-result store))
+  [context]
+  (:push-result context))
 
 (defn- remap-tmp-ids
-  [store tmp-map]
+  [context tmp-map]
   (->
-   store
+   context
    (update-in
     [:starred]
     (fn [starred]
@@ -475,67 +486,67 @@
                      [doctype remapped-doc-ids]))
                  sel))]
            [sel-id remapped-sel]))
-       (:selections store))))))
+       (:selections context))))))
 
 (defn push-save
-  [store context saver]
-  (let [save-ret (saver store context)]
+  [context saver]
+  (let [save-ret (saver context)]
     {:save-ret save-ret
-     :starred (:starred store)}))
+     :starred (:starred context)}))
 
 (defn push-post-save
   ;; this is decoupled from push to provide a side-effect free option
   ;; Also, save-info contains starred, which typically are the starred 
   ;; that were considered in the save.
-  [store save-info]
-  (let [store (if (= :success (get-in save-info [:save-ret :result]))
-                (-> store
+  [context save-info]
+  (let [context (if (= :success (get-in save-info [:save-ret :result]))
+                (-> context
                     (remap-tmp-ids (get-in save-info [:save-ret :remap]))
                     (unstar (map #(get (get-in save-info [:save-ret :remap]) % %) (keys (:starred save-info)))))
-                store)]
-    (set-push-result store (get-in save-info [:save-ret :result]))))
+                context)]
+    (set-push-result context (get-in save-info [:save-ret :result]))))
 
 (defn push
-  ;; save, upon success unstar, otherwise return store unmodified
+  ;; save, upon success unstar, otherwise return context unmodified
   ;; leave it to a higher order function to reiterate
-  [store context saver]
-  (let [ret (push-save store context saver)]
-    (push-post-save store ret)))
+  [context saver]
+  (let [ret (push-save context saver)]
+    (push-post-save context ret)))
 
 (defn- prototype-doctypes
   [prototypes doctype]
   (or (get prototypes doctype) [doctype]))
 
 (defn- get-ids-of-type
-  [store doctype]
+  [context doctype]
   (let [doctype (keyword doctype)
-        doctype-set (set (prototype-doctypes (:prototypes store) doctype))]
-    (select #(contains? doctype-set (htype (get-document store %))) (:local store))))
+        doctype-set (set (prototype-doctypes (:prototypes context) doctype))]
+    (select #(contains? doctype-set (htype (get-document context %))) (:local context))))
 
 (defn checkout
-  ([store]
-     (map #(get-document store %) (:local store)))
-  ([store doctype]
-     (map #(get-document store %) (get-ids-of-type store doctype))))
+  ([context]
+     (map #(get-document context %) (:local context)))
+  ([context doctype]
+     (map #(get-document context %) (get-ids-of-type context doctype))))
 
 (defn get-selected-ids
-  ([store selection-id]
-     (get-in store [:selections selection-id]))
-  ([store selection-id doctype]
-     (let [doctypes (prototype-doctypes (:prototypes store) doctype)]
-       (flatten (map #(get-in store [:selections selection-id %]) doctypes)))))
+  ([context selection-id]
+     (get-in context [:selected selection-id]))
+  ([context selection-id doctype]
+     (let [doctypes (prototype-doctypes (:prototypes context) doctype)]
+       (flatten (map #(get-in context [:selected selection-id %]) doctypes)))))
 
 (defn checkout-selected
-  ([store selection-id doctype]
-     (let [ids (get-selected-ids store selection-id doctype)]
+  ([context selection-id doctype]
+     (let [ids (get-selected-ids context selection-id doctype)]
        (if (string? ids)
-         (get-document store ids)
-         (map #(get-document store %) ids))))
-  ([store selection-id]
+         (get-document context ids)
+         (map #(get-document context %) ids))))
+  ([context selection-id]
      (into {}
            (map
-            (fn [[doctype _]] [doctype (checkout-selected store selection-id doctype)])
-            (get-selected-ids store selection-id)))))
+            (fn [[doctype _]] [doctype (checkout-selected context selection-id doctype)])
+            (get-selected-ids context selection-id)))))
 
 ;; TODO: upon loading the context, create the relations graph for efficiency
 (defn- get-relations
@@ -545,19 +556,19 @@
       :in (filter (fn [rel] (= doctype (rel :to))) (context :relations))))
 
 (defn- walk-relation
-  [store context selection-id doctype rel]
-  (let [ids (get-in store [:selections selection-id doctype])
+  [context selection-id doctype rel]
+  (let [ids (get-in context [:selected selection-id doctype])
         [direction rel-doctype]
         (condp = doctype
           (:from rel) [:out (:to rel)]
           (:to rel) [:in (:from rel)])]
     (if (get-in context [:selections selection-id rel-doctype])
       (reduce
-       (fn [store id]
+       (fn [context id]
          (let [values
                (condp = direction
-                 :out (hrel (get-document store id) rel-doctype)
-                 :in (hid (get-document store id)))
+                 :out (hrel (get-document context id) rel-doctype)
+                 :in (hid (get-document context id)))
                values (if (coll? values) values (vector values))
                rel-ids
                (reduce
@@ -568,13 +579,13 @@
                            (let [rel-values
                                  (condp = direction
                                    :out rel-id
-                                   :in (hrel (get-document store rel-id) doctype))]
+                                   :in (hrel (get-document context rel-id) doctype))]
                              (if (coll? rel-values)
                                (some #(= value %) rel-values)
                                (= value rel-values))))
-                         (get-ids-of-type store rel-doctype))
+                         (get-ids-of-type context rel-doctype))
                         rel-ids (if-let [sort-keys (get-in context [:selections selection-id rel-doctype :sort-by])]
-                                  (sort-by (fn [el] ((apply juxt sort-keys) (get-document store el))) rel-ids)
+                                  (sort-by (fn [el] ((apply juxt sort-keys) (get-document context el))) rel-ids)
                                   rel-ids)
                         rel-ids (condp = (get-in context [:selections selection-id rel-doctype :select])
                                   :first (if (first rel-ids) [(first rel-ids)] [])
@@ -585,59 +596,59 @@
                 []
                 values)]
            (if (some empty? [values rel-ids])
-             store
-             (update-in store [:selections selection-id rel-doctype] #(vec (distinct (concat % rel-ids)))))))
-       store
+             context
+             (update-in context [:selected selection-id rel-doctype] #(vec (distinct (concat % rel-ids)))))))
+       context
        ids)
-      store)))
+      context)))
 
 (defn- propagate-selection
   ;; recursively propagate selection backward and forward, starting from id and making sure a document
-  ;; type is not selected twice, return store with updated selection
+  ;; type is not selected twice, return context with updated selection
   ;; TODO: there were hooks in the Javascript version that are called everytime a selection changes.
   ;; Here we could keep track of who changed at the end of the propagation (better, called once)
-  [store context selection-id doctypes]
-  (loop [store store
+  [context selection-id doctypes]
+  (loop [context context
          doctypes doctypes
          visited (into #{} doctypes)]
     (if (empty? doctypes)
-      store
+      context
       (let [doctype (first doctypes)
             out (filter #(not (contains? visited (:to %))) (get-relations context doctype :out))
             in (filter #(not (contains? visited (:from %))) (get-relations context doctype :in))]
         (recur
-         (let [store (reduce (fn [store rel] (walk-relation store context selection-id doctype rel)) store out)
-               store (reduce (fn [store rel] (walk-relation store context selection-id doctype rel)) store in)]
-           store)
+         (let [context (reduce (fn [context rel] (walk-relation context selection-id doctype rel)) context out)
+               context (reduce (fn [context rel] (walk-relation context selection-id doctype rel)) context in)]
+           context)
          (concat (rest doctypes) (map :to out) (map :from in))
          (conj visited doctype))))))
 
 ;; TODO: support multiple selection
 (defn select-document
-  [store context id selection-id]
-  (let [doctype (htype (get-document store id))]
-    (-> store
-        (assoc-in [:selections selection-id] nil)
-        (assoc-in [:selections selection-id doctype] [id])
-        (propagate-selection context selection-id [doctype]))))
+  [context id selection-id]
+  (let [doctype (htype (get-document context id))]
+    (-> context
+        (assoc-in [:selected selection-id] nil)
+        (assoc-in [:selected selection-id doctype] [id])
+        (propagate-selection selection-id [doctype]))))
 
 (defn unselect
-  [store context selection-id doctype]
+  [context selection-id doctype]
   (if doctype
-    (-> store
-        (assoc-in [:selections selection-id doctype] nil)
-        (propagate-selection context selection-id [doctype]))
-    (assoc-in store [:selections selection-id] nil)))
+    (-> context
+        (assoc-in [:selected selection-id doctype] nil)
+        (propagate-selection selection-id [doctype]))
+    (assoc-in context [:selected selection-id] nil)))
 
 ;; TODO: support multiple external-ids of the same type
 (defn select-defaults
-  [store context selection-id]
-  (let [store (assoc-in store [:selections selection-id] nil)
-        store
+  [context selection-id]
+  (let [context (assoc-in context [:selected selection-id] nil)
+        context
         (reduce
-         (fn [store [external-doctype external-id]]
-           (assoc-in store [:selections selection-id external-doctype] [external-id]))
-         store
+         (fn [context [external-doctype external-id]]
+           (assoc-in context [:selected selection-id external-doctype] [external-id]))
+         context
          (:external-ids context))]
-    (propagate-selection store context selection-id (map first (:external-ids context)))))
+    (propagate-selection context selection-id (map first (:external-ids context)))))
 

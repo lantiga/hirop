@@ -310,7 +310,7 @@
         (.. (java.text.SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:ssZ") (format (java.util.Date.)))
         document (assoc-hmeta document
                               (merge (hmeta document) (:meta context) {:timestamp timestamp}))
-        document (if (hid document) document (assoc-hid (tmp-uuid)))
+        document (if (hid document) document (assoc-hid document (tmp-uuid)))
         context (if baseline (add-document context baseline :baseline) context)]
     (-> context
         (add-document document :starred)

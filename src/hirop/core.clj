@@ -41,13 +41,13 @@
   (assoc-in doc [:_hirop :rev] rev))
 
 (defn dissoc-hrev [doc]
-  (update-in doc [:_hirop] #(dissoc % :rev)))
+  (update-in doc [:_hirop] dissoc :rev))
 
 (defn assoc-hrels [doc rels]
   (assoc-in doc [:_hirop :rels] rels))
 
 (defn dissoc-hrels [doc]
-  (update-in doc [:_hirop] #(dissoc % :rels)))
+  (update-in doc [:_hirop] dissoc :rels))
 
 (defn assoc-hrel [doc doctype rel-id]
   (assoc-in doc [:_hirop :rels doctype] rel-id))
@@ -288,7 +288,7 @@
 
 (defn add-to-set
   [context document set-name]
-  (update-in context [set-name] #(conj % (hid document))))
+  (update-in context [set-name] conj (hid document)))
 
 (defn add-to-local
   [context document]
@@ -408,7 +408,7 @@
     (unstar context (keys (:starred context))))
   ([context starred-ids]
      (-> context
-         (update-in [:stored] #(merge % (select-keys (:starred context) starred-ids)))
+         (update-in [:stored] merge (select-keys (:starred context) starred-ids))
          ;; this only removes the starred and baselines relative to the provided starred
          (update-in [:starred] #(apply dissoc % starred-ids))
          (update-in [:baseline] #(apply dissoc % starred-ids)))))

@@ -11,7 +11,7 @@
   (put-context [this context]
     "Insert context in store, return context-id")
   
-  (assoc-context [this context context-id]
+  (assoc-context [this context-id context]
     "Insert context in store, return nil")
 
   (delete-context [this context-id]

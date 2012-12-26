@@ -2,6 +2,17 @@
   (:use [clojure.set :only [union select difference]])
   (:require [clojure.string :as string]))
 
+(def tmp-prefix "tmp")
+
+;; TODO: make this work for ClojureScript
+(defn uuid
+  []
+  (str (java.util.UUID/randomUUID)))
+  
+(defn tmp-uuid
+  []
+  (str tmp-prefix (uuid)))
+
 (defn hid [doc]
   (get-in doc [:_hirop :id]))
 
@@ -50,11 +61,9 @@
 (defn assoc-hconf [doc conf]
   (assoc-in doc [:_hirop :conf] conf))
 
-(def tmp-prefix "tmp")
-
 (defn is-temporary-id?
   [id]
-  (string? (re-find (re-pattern (str "^" tmp-prefix) id))))
+  (string? (re-find (re-pattern (str "^" tmp-prefix)) id)))
 
 (defn has-temporary-id?
   [doc]
@@ -140,13 +149,11 @@
 
 (defn- document-store
   []
-  {:uuid 0
-   :push-result nil
+  {:push-result nil
    :merge-result nil
    :stored {}
    :starred {}
    :baseline {}
-   :configurations {}
    :remote #{}
    :local #{}
    :revisions {}
@@ -155,9 +162,7 @@
 ;; TODO: here we should check that all relations marked as external are specified in external-ids, otherwise fail
 ;; Also, we should only include doctypes that are in use in the context (in relationships, selections or prototypes) 
 (defn create-context
-  ([context-name context doctypes external-ids]
-     (create-context context-name context doctypes external-ids {}))
-  ([context-name context doctypes external-ids meta]
+  ([context-name context doctypes external-ids meta backend]
      (let [prototypes (compile-prototypes (:prototypes context))
            selections (compile-selections (:selections context) prototypes)
            relations (compile-relations (:relations context) prototypes)]
@@ -170,6 +175,7 @@
         (assoc :relations relations)
         (assoc :external-ids external-ids)
         (assoc :meta meta)
+        (assoc :backend backend)
         (merge (document-store))))))
 
 (defn get-doctype
@@ -209,23 +215,11 @@
                    (get context :external-ids))]
     (->
      empty-document
+     (assoc-hid (tmp-uuid))
      (assoc-htype doctype)
      (assoc-in [:_hirop :conf] configuration)
      (assoc-hrels relations)
      (merge fields))))
-
-;; TODO: for serializing, (assoc store (zipmap (:remote store) (repeat nil)))
-
-;; TODO: avoid incremental uuids. Use random uuids, so getting a new
-;; doc is idempotent.
-;; (defn uuid [] (str (java.util.UUID/randomUUID)))
-(defn inc-uuid
-  [context]
-  (update-in context [:uuid] inc))
-
-(defn get-uuid
-  [context]
-  (str tmp-prefix (:uuid context) ""))
 
 (defn- get-id
   [doc-or-id]
@@ -316,10 +310,7 @@
         (.. (java.text.SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:ssZ") (format (java.util.Date.)))
         document (assoc-hmeta document
                               (merge (hmeta document) (:meta context) {:timestamp timestamp}))
-        context (if (hid document) context (inc-uuid context))
-        document (if (hid document)
-                   document
-                   (assoc-hid document (get-uuid context)))
+        document (if (hid document) document (assoc-hid (tmp-uuid)))
         context (if baseline (add-document context baseline :baseline) context)]
     (-> context
         (add-document document :starred)
@@ -409,7 +400,7 @@
 
 (defn pull
   [context fetcher]
-  (-> context (fetch context fetcher) merge-remote))
+  (-> context (fetch fetcher) merge-remote))
 
 (defn- unstar
   ;; move starred to stored (really?), remove baselines (locked?)
@@ -420,7 +411,7 @@
          (update-in [:stored] #(merge % (select-keys (:starred context) starred-ids)))
          ;; this only removes the starred and baselines relative to the provided starred
          (update-in [:starred] #(apply dissoc % starred-ids))
-         (assoc [:baseline] #(apply dissoc % starred-ids)))))
+         (update-in [:baseline] #(apply dissoc % starred-ids)))))
 
 (defn- set-merge-result
   [context result]
@@ -499,11 +490,13 @@
   ;; Also, save-info contains starred, which typically are the starred 
   ;; that were considered in the save.
   [context save-info]
-  (let [context (if (= :success (get-in save-info [:save-ret :result]))
-                (-> context
-                    (remap-tmp-ids (get-in save-info [:save-ret :remap]))
-                    (unstar (map #(get (get-in save-info [:save-ret :remap]) % %) (keys (:starred save-info)))))
-                context)]
+  (let [context
+        (if (= :success (get-in save-info [:save-ret :result]))
+          (->
+           context
+           (remap-tmp-ids (get-in save-info [:save-ret :remap]))
+           (unstar (map #(get (get-in save-info [:save-ret :remap]) % %) (keys (:starred save-info)))))
+          context)]
     (set-push-result context (get-in save-info [:save-ret :result]))))
 
 (defn push

@@ -13,7 +13,7 @@
                         :optimizations :advanced
                         :pretty-print false}}],
    :crossovers
-   [hirop.core hirop.backend hirop.session hirop.stateful],
+   [hirop.core hirop.backend hirop.protocols hirop.atom-store],
    :crossover-jar false,
    :crossover-path "src-cljs/crossovers"}
   :dependencies [[org.clojure/clojure "1.4.0"]])

@@ -1,10 +1,8 @@
 (ns hirop.backend)
 
-(def ^:dynamic *connection-data* nil)
+(defmulti fetch (fn [backend context] (keyword (:name backend))))
 
-(defmulti fetch (fn [backend context] backend))
+(defmulti save (fn [backend context] (keyword (:name backend))))
 
-(defmulti save (fn [backend context] backend))
-
-(defmulti history (fn [backend id] backend))
+(defmulti history (fn [backend id] (keyword (:name backend))))
 

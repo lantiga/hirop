@@ -161,7 +161,7 @@
   
 ;; TODO: here we should check that all relations marked as external are specified in external-ids, otherwise fail
 ;; Also, we should only include doctypes that are in use in the context (in relationships, selections or prototypes) 
-(defn create-context
+(defn init-context
   ([context-name context doctypes external-ids meta backend]
      (let [prototypes (compile-prototypes (:prototypes context))
            selections (compile-selections (:selections context) prototypes)

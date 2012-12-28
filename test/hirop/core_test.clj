@@ -34,7 +34,7 @@
 (deftest cardinality-test
   (let [context
         (->
-         (create-context :Test cardinality-test-context doctypes {:Foo "0"} {} :none)
+         (init-context :Test cardinality-test-context doctypes {:Foo "0"} {} :none)
          (fetch cardinality-test-fetcher)
          (merge-remote))
         context-baz (select-document context "3" :test)
@@ -74,7 +74,7 @@
 (deftest prototype-test
   (let [context
         (->
-         (create-context :Test prototype-test-context doctypes {:Foo "0"} {} :none)
+         (init-context :Test prototype-test-context doctypes {:Foo "0"} {} :none)
          (fetch prototype-test-fetcher)
          (merge-remote))
         context-baz (select-document context "3" :test)
@@ -108,7 +108,7 @@
 (deftest remap-test
   (let [context
         (->
-         (create-context :Test remap-test-context doctypes {:Foo "0"} {} :none)
+         (init-context :Test remap-test-context doctypes {:Foo "0"} {} :none)
          (fetch remap-test-fetcher)
          (merge-remote))
         bar1 (assoc (new-document context :Bar) :_hirop {:rels {:Foo "0"}})
@@ -160,7 +160,7 @@
 (deftest select-all-test
   (let [context
         (->
-         (create-context :Test select-all-test-context doctypes {:Foo "0"} {} :none)
+         (init-context :Test select-all-test-context doctypes {:Foo "0"} {} :none)
          (fetch select-all-test-fetcher)
          (merge-remote))
         context-all (select-document context "0" :test-all)
@@ -214,7 +214,7 @@
 (deftest select-loop-test
   (let [context
         (->
-         (create-context :Test select-loop-test-context doctypes {:Foo "0"} {} :none)
+         (init-context :Test select-loop-test-context doctypes {:Foo "0"} {} :none)
          (fetch select-loop-test-fetcher)
          (merge-remote)
          (select-document "1" :test))]
@@ -241,7 +241,7 @@
 (deftest select-defaults-test
   (let [context
         (->
-         (create-context :Test select-defaults-test-context doctypes {:Foo "0"} {} :none)
+         (init-context :Test select-defaults-test-context doctypes {:Foo "0"} {} :none)
          (fetch select-defaults-test-fetcher)
          (merge-remote)
          (select-defaults :test-defaults)
@@ -279,7 +279,7 @@
 (deftest remap-test
   (let [context
         (->
-         (create-context :Test remap-test-context doctypes {:Foo "0"} {} :none)
+         (init-context :Test remap-test-context doctypes {:Foo "0"} {} :none)
          (fetch conflict-test-fetcher-1)
          (merge-remote))
         bar (assoc (new-document context :Bar) :_hirop {:rels {:Foo "0"}})

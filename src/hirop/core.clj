@@ -101,7 +101,7 @@
          (rest prototype-list))
        (if-let [children (get prototypes [(first prototype-list)])]
          doctypes
-         (conj doctypes (first prototype-list)))))))
+         (conj doctypes (keyword (first prototype-list))))))))
 
 (defn- compile-prototypes
   [prototypes]
@@ -139,7 +139,7 @@
         (fn [out fp]
           (reduce
            (fn [out tp]
-             (conj out (-> r (assoc :from fp) (assoc :to tp))))
+             (conj out (-> r (assoc :from (keyword fp)) (assoc :to (keyword tp)))))
            out
            to-p))
         out
@@ -578,9 +578,10 @@
                                (= value rel-values))))
                          (get-ids-of-type context rel-doctype))
                         rel-ids (if-let [sort-keys (get-in context [:selections selection-id rel-doctype :sort-by])]
-                                  (sort-by (fn [el] ((apply juxt sort-keys) (get-document context el))) rel-ids)
+                                  (let [sort-keys (vec (map keyword sort-keys))]
+                                    (sort-by (fn [el] ((apply juxt sort-keys) (get-document context el))) rel-ids))
                                   rel-ids)
-                        rel-ids (condp = (get-in context [:selections selection-id rel-doctype :select])
+                        rel-ids (condp = (keyword (get-in context [:selections selection-id rel-doctype :select]))
                                   :first (if (first rel-ids) [(first rel-ids)] [])
                                   :last (if (last rel-ids) [(last rel-ids)] [])
                                   :all rel-ids

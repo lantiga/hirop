@@ -644,5 +644,5 @@
            (assoc-in context [:selected selection-id external-doctype] [external-id]))
          context
          (:external-ids context))]
-    (propagate-selection context selection-id (map first (:external-ids context)))))
+    (propagate-selection context selection-id (keys (:external-ids context)))))
 

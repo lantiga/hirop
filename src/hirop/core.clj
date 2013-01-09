@@ -340,6 +340,8 @@
 
 (defn conflicted?
   [context id]
+  ;; TODO: when merging strategy is pluggable, use the
+  ;; same predicate
   (if-let [starred (get-document context id :starred)]
     (let [stored (get-document context id :stored)
           baseline (get-document context id :baseline)
@@ -377,6 +379,16 @@
        :starred (get-document context id :starred)
        :baseline (get-document context id :baseline)})
    (get-conflicted-ids context))))
+
+(defn commit-conflicted
+  [context document]
+  (let [stored-rev (hrev (get-stored context (hid document)))
+        document (assoc-hrev document stored-rev)]
+    (commit context document)))
+
+(defn mcommit-conflicted
+  [context documents]
+  (reduce (fn [context document] (commit-conflicted context document)) context documents))
 
 (defn merge-document
   ;; In case of fast-forward, we advance :rev, otherwise we don't.

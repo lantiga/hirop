@@ -102,26 +102,26 @@
   [{:_hirop {:id "0" :type :Foo}
     :id "0"}])
 
-(defn remap-test-saver [_]
-  {:result :success :remap {"tmp1" "1" "tmp2" "2" "tmp3" "3"}})
-
 (deftest remap-test
   (let [context
         (->
          (init-context :Test remap-test-context doctypes {:Foo "0"} {} :none)
          (fetch remap-test-fetcher)
          (merge-remote))
-        bar1 (assoc (new-document context :Bar) :_hirop {:rels {:Foo "0"}})
-        bar2 (assoc (new-document context :Bar) :_hirop {:rels {:Foo "0"}})
-        baz (assoc (new-document context :Baz) :_hirop {:rels {:Bar [(hid bar1) (hid bar2)]}})
+        bar1 (assoc-hrel (new-document context :Bar) :Foo "0")
+        bar2 (assoc-hrel (new-document context :Bar) :Foo "0")
+        baz (assoc-hrel (new-document context :Baz) :Bar [(hid bar1) (hid bar2)])
+        remap-test-saver
+        (constantly
+          {:result :success :remap {(hid bar1) "1" (hid bar2) "2" (hid baz) "3"}})
         context (mcommit context [bar1 bar2 baz])
         context (select-document context "0" :test)
         context (push context remap-test-saver)]
     (is (= (:local context)
            #{"0" "1" "2" "3"}))
-    (is (= (:_id (first (checkout-selected context :test :Baz)))
+    (is (= (hid (first (checkout-selected context :test :Baz)))
            "3"))
-    (is (= (:Bar_ (first (checkout context :Baz)))
+    (is (= (hrel (first (checkout context :Baz)) :Bar)
            ["1" "2"]))))
 
 
@@ -234,6 +234,7 @@
      :Baz {:select :first}}}
    :configurations {}})
 
+
 (defn select-defaults-test-fetcher [_]
   [{:_hirop {:id "0" :type :Foo}
     :id "0"}])
@@ -261,28 +262,24 @@
 (defn conflict-test-fetcher-2 [_]
   [{:_hirop {:id "0" :type :Foo :meta {}}
     :id "0"}
-   {:_hirop {:id "1" :type :Bar :meta {} :rels {:Foo "0"}}
+   {:_hirop {:id "1" :type :Bar :meta {:foo :bar} :rels {:Foo "0"}}
     :title ""}])
 
 (defn conflict-test-fetcher-3 [_]
   [{:_hirop {:id "0" :type :Foo :meta {}}
     :id "0"}
-   {:_hirop {:id "1" :type :Bar :meta {} :rels {:Foo "0"}}
+   {:_hirop {:id "1" :type :Bar :meta {:foo :biz} :rels {:Foo "0"}}
     :title "BAR"}])
 
-(defn conflict-test-saver-1 [_]
-  {:result :success :remap {"tmp1" "1"}})
-
-(defn conflict-test-saver-2 [_]
-  {:result :success :remap {}})
-
-(deftest remap-test
+(deftest conflict-test
   (let [context
         (->
-         (init-context :Test remap-test-context doctypes {:Foo "0"} {} :none)
+         (init-context :Test conflict-test-context doctypes {:Foo "0"} {} :none)
          (fetch conflict-test-fetcher-1)
          (merge-remote))
-        bar (assoc (new-document context :Bar) :_hirop {:rels {:Foo "0"}})
+        bar (assoc-hrel (new-document context :Bar) :Foo "0")
+        conflict-test-saver-1
+        (constantly {:result :success :remap {(hid bar) "1"}})
         context
         (->
          (commit context bar)
@@ -291,10 +288,40 @@
          (merge-remote))
         bar (first (checkout context :Bar))
         bar (assoc bar :title "BAR")
+        conflict-test-saver-2
+        (constantly {:result :success :remap {}})
         context
         (->
          (commit context bar)
          (push conflict-test-saver-2)
          (fetch conflict-test-fetcher-3)
          (merge-remote))]
-    (is (empty? (checkout-conflicted context)))))
+    (is (empty? (checkout-conflicted context))))
+
+  (let [context
+        (->
+         (init-context :Test conflict-test-context doctypes {:Foo "0"} {} :none)
+         (fetch conflict-test-fetcher-1)
+         (merge-remote))
+        bar (assoc-hrel (new-document context :Bar) :Foo "0")
+        conflict-test-saver-1
+        (constantly {:result :success :remap {(hid bar) "1"}})
+        context
+        (->
+         (commit context bar)
+         (push conflict-test-saver-1)
+         (fetch conflict-test-fetcher-2)
+         (merge-remote))
+        bar (first (checkout context :Bar))
+        bar (assoc bar :title "BAZ")
+        context
+        (->
+         (commit context bar)
+         (fetch conflict-test-fetcher-3)
+         (merge-remote))]
+    (let [conflicted (checkout-conflicted context)
+          conflicted-doctype (first (keys (checkout-conflicted context)))]
+      (is (= :Bar conflicted-doctype))
+      (is (= "" (get-in conflicted [conflicted-doctype 0 :baseline :title])))
+      (is (= "BAR" (get-in conflicted [conflicted-doctype 0 :stored :title])))
+      (is (= "BAZ" (get-in conflicted [conflicted-doctype 0 :starred :title]))))))

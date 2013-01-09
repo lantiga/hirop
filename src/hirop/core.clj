@@ -267,7 +267,7 @@
 
 (defn revisions
   [context id]
-  (get-in context [:revisions id]))
+  (vec (get-in context [:revisions id])))
 
 (defn add-document
   ([context document]
@@ -276,13 +276,15 @@
      (->
       context
       (assoc-in [bucket (hid document)] document)
-      (update-in [:revisions (hid document)] conj (hrev document)))))
+      (update-in [:revisions (hid document)]
+                 (fn [revs rev] (let [revs (or revs #{})] (if rev (conj revs rev) revs)))
+                 (hrev document)))))
 
 (defn add-document-if-new
   ([context document]
      (add-document-if-new context document :stored))
   ([context document bucket]
-     (if (contains? (set (revisions context (hid document))) (hrev document))
+     (if (contains? (revisions context (hid document)) (hrev document))
        context
        (add-document context document bucket))))
 
@@ -338,14 +340,23 @@
 
 (defn conflicted?
   [context id]
-  (let [starred (dissoc (get-document context id :starred) :_hirop)
-        stored (dissoc (get-document context id :stored) :_hirop)
-        baseline (dissoc (get-document context id :baseline) :_hirop)]
-    (if (nil? starred)
-      false
-      (and
-       (not= starred baseline)
-       (not= stored baseline)))))
+  (if-let [starred (get-document context id :starred)]
+    (let [stored (get-document context id :stored)
+          baseline (get-document context id :baseline)
+          starred-fields (dissoc starred :_hirop)
+          stored-fields (dissoc stored :_hirop)
+          baseline-fields (dissoc baseline :_hirop)
+          starred-rels (hrels starred)
+          stored-rels (hrels stored)
+          baseline-rels (hrels baseline)]
+      (or
+       (and
+        (not= starred-fields baseline-fields)
+        (not= stored-fields baseline-fields))
+       (and
+        (not= starred-rels baseline-rels)
+        (not= stored-rels baseline-rels))))
+    false))
 
 (defn get-conflicted-ids
   [context]
@@ -444,8 +455,7 @@
                               [k (vec (map #(or (get tmp-map %) %) val))]
                               [k (or (get tmp-map val) val)]))
                           (hrels doc)))
-                new-doc (assoc-hid doc new-id)
-                new-doc (assoc-hrels doc new-relations)]
+                new-doc (-> doc (assoc-hid new-id) (assoc-hrels new-relations))]
             [new-id new-doc]))
         starred))))
    (update-in
@@ -455,7 +465,16 @@
        local
        (difference (set (keys tmp-map)))
        (union (set (vals tmp-map))))))
-   (assoc :selections
+   (update-in
+    [:revisions]
+    (fn [revisions]
+      (into
+       {}
+       (map
+        (fn [[id revs]]
+          [(or (get tmp-map id) id) revs])
+        revisions))))
+   (assoc :selected
      (into
       {}
       (map
@@ -477,7 +496,7 @@
                      [doctype remapped-doc-ids]))
                  sel))]
            [sel-id remapped-sel]))
-       (:selections context))))))
+       (:selected context))))))
 
 (defn push-save
   [context saver]

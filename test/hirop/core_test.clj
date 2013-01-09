@@ -262,13 +262,13 @@
 (defn conflict-test-fetcher-2 [_]
   [{:_hirop {:id "0" :type :Foo :meta {}}
     :id "0"}
-   {:_hirop {:id "1" :type :Bar :meta {:foo :bar} :rels {:Foo "0"}}
+   {:_hirop {:id "1" :rev "1" :type :Bar :meta {:foo :bar} :rels {:Foo "0"}}
     :title ""}])
 
 (defn conflict-test-fetcher-3 [_]
   [{:_hirop {:id "0" :type :Foo :meta {}}
     :id "0"}
-   {:_hirop {:id "1" :type :Bar :meta {:foo :biz} :rels {:Foo "0"}}
+   {:_hirop {:id "1" :rev "2" :type :Bar :meta {:foo :biz} :rels {:Foo "0"}}
     :title "BAR"}])
 
 (deftest conflict-test

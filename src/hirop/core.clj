@@ -351,13 +351,15 @@
           starred-rels (hrels starred)
           stored-rels (hrels stored)
           baseline-rels (hrels baseline)]
-      (or
-       (and
-        (not= starred-fields baseline-fields)
-        (not= stored-fields baseline-fields))
-       (and
-        (not= starred-rels baseline-rels)
-        (not= stored-rels baseline-rels))))
+      (and
+       (not= (hrev starred) (hrev stored))
+       (or
+        (and
+         (not= starred-fields baseline-fields)
+         (not= stored-fields baseline-fields))
+        (and
+         (not= starred-rels baseline-rels)
+         (not= stored-rels baseline-rels)))))
     false))
 
 (defn get-conflicted-ids

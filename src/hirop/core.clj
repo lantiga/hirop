@@ -380,7 +380,6 @@
 
 (defn merge-document
   ;; In case of fast-forward, we advance :rev, otherwise we don't.
-  ;; TODO: make merging strategy a multimethod
   [context id]
   (let [starred (get-document context id :starred)
         stored (get-document context id :stored)
@@ -389,7 +388,10 @@
       (let [merged
             (reduce
              (fn [document key]
-               (assoc document key (get stored key)))
+               ;; merging strategy - make it pluggable
+               (if (not= (get baseline key) (get starred key))
+                 document
+                 (assoc document key (get stored key))))
              starred
              (keys (dissoc stored :_hirop)))
             ;; TODO: consider merging more of _hirop than just rev

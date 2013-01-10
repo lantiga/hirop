@@ -399,15 +399,25 @@
         stored (get-document context id :stored)
         baseline (get-document context id :baseline)]
     (if (and starred (not= (hrev baseline) (hrev stored)))
+      ;; merging strategy - make it pluggable
       (let [merged
             (reduce
              (fn [document key]
-               ;; merging strategy - make it pluggable
                (if (not= (get baseline key) (get starred key))
                  document
                  (assoc document key (get stored key))))
              starred
              (keys (dissoc stored :_hirop)))
+            merged
+            (assoc-hrels
+             merged
+             (reduce
+              (fn [rels rel-doctype]
+                (if (not= (hrel baseline rel-doctype) (hrel starred rel-doctype))
+                  rels
+                  (assoc rels rel-doctype (hrel stored rel-doctype))))
+              (hrels starred)
+              (keys (hrels stored))))
             ;; TODO: consider merging more of _hirop than just rev
             merged (if (conflicted? context id)
                      merged

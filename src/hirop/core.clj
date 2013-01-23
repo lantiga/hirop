@@ -8,7 +8,7 @@
 (defn uuid
   []
   (str (java.util.UUID/randomUUID)))
-  
+
 (defn tmp-uuid
   []
   (str tmp-prefix (uuid)))
@@ -158,9 +158,9 @@
    :local #{}
    :revisions {}
    :selected {}})
-  
+
 ;; TODO: here we should check that all relations marked as external are specified in external-ids, otherwise fail
-;; Also, we should only include doctypes that are in use in the context (in relationships, selections or prototypes) 
+;; Also, we should only include doctypes that are in use in the context (in relationships, selections or prototypes)
 (defn init-context
   ([context-name context doctypes external-ids meta backend]
      (let [prototypes (compile-prototypes (:prototypes context))
@@ -168,14 +168,14 @@
            relations (compile-relations (:relations context) prototypes)]
        (->
         context
-        (assoc :name context-name)
-        (assoc :doctypes doctypes)
-        (assoc :prototypes prototypes)
-        (assoc :selections selections)
-        (assoc :relations relations)
-        (assoc :external-ids external-ids)
-        (assoc :meta meta)
-        (assoc :backend backend)
+        (merge {:name context-name
+                :doctypes doctypes
+                :prototypes prototypes
+                :selections selections
+                :relations relations
+                :external-ids external-ids
+                :meta meta
+                :backend backend})
         (merge (document-store))))))
 
 (defn get-doctype
@@ -326,7 +326,7 @@
 ;; They should all be kept in remote
 ;; We could promote one document (at random - or consistently - or by ownership)
 ;; and let merge take care of this (i.e. generate conflicts as needed). Or we could store
-;; all documents in a vector. Or in a special map. In any case, a checkout should succeed. 
+;; all documents in a vector. Or in a special map. In any case, a checkout should succeed.
 (defn fetch
   [context fetcher]
   (let [documents (fetcher context)]
@@ -532,7 +532,7 @@
 
 (defn push-post-save
   ;; this is decoupled from push to provide a side-effect free option
-  ;; Also, save-info contains starred, which typically are the starred 
+  ;; Also, save-info contains starred, which typically are the starred
   ;; that were considered in the save.
   [context save-info]
   (let [context
@@ -690,4 +690,3 @@
          context
          (:external-ids context))]
     (propagate-selection context selection-id (keys (:external-ids context)))))
-

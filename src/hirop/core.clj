@@ -70,15 +70,15 @@
   (is-temporary-id? (hid doc)))
 
 (defn- get-relation-fields
-  [context doctype val]
+  [context doctype]
   (reduce
    (fn [res el]
      (if (or
           (= doctype (:from el))
           (= :* (:from el)))
-       (assoc res (:to el) val)
+       (conj res (:to el))
        res))
-   {}
+   []
    (:relations context)))
 
 (defn get-external-doctypes
@@ -181,16 +181,11 @@
 (defn get-doctype
   [context doctype]
   (let [configuration (get-in context [:configurations doctype])
-        relations (get-relation-fields context doctype "String")]
+        relations (get-relation-fields context doctype)]
     (->
      (get-in context [:doctypes doctype])
-     (assoc :_hirop
-       {:id {}
-        :rev {}
-        :type {}
-        :meta {}
-        :conf configuration
-        :rels relations}))))
+     (assoc :conf configuration)
+     (assoc :rels relations))))
 
 (def empty-document
   {:_hirop
@@ -205,13 +200,13 @@
   [context doctype]
   (let [fields (zipmap (keys (get-in context [:doctypes doctype :fields])) (repeat ""))
         configuration (get-in context [:configurations doctype])
-        relations (get-relation-fields context doctype nil)
+        relations (get-relation-fields context doctype)
         relations (reduce
                    (fn [rels [k v]]
                      (if (contains? rels k)
                        (assoc rels k v)
                        rels))
-                   relations
+                   (zipmap relations (repeat nil))
                    (get context :external-ids))]
     (->
      empty-document

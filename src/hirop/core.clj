@@ -76,9 +76,9 @@
      (if (or
           (= doctype (:from el))
           (= :* (:from el)))
-       (conj res (:to el))
+       (assoc res (:to el) el)
        res))
-   []
+   {}
    (:relations context)))
 
 (defn get-external-doctypes
@@ -206,7 +206,7 @@
                      (if (contains? rels k)
                        (assoc rels k v)
                        rels))
-                   (zipmap relations (repeat nil))
+                   (zipmap (keys relations) (repeat nil))
                    (get context :external-ids))]
     (->
      empty-document

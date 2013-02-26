@@ -567,7 +567,10 @@
      (get-in context [:selected selection-id]))
   ([context selection-id doctype]
      (let [doctypes (prototype-doctypes (:prototypes context) doctype)]
-       (flatten (map #(get-in context [:selected selection-id %]) doctypes)))))
+       (->>
+        (map #(get-in context [:selected selection-id %]) doctypes)
+        (filter #((comp not nil?) %))
+        flatten))))
 
 (defn checkout-selected
   ([context selection-id doctype]

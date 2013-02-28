@@ -1,11 +1,25 @@
 # hirop
 
-A Clojure(script) library for asynchronous multi-document consistency and related goodness. 
+A Clojure(Script) data layer targeted at multi-document consistency and asynchronous updates.
 
-Alpha stage, expect a stable release by the end of 2012.
+## Usage
+
+Leiningen:
+```clojure
+[hirop "0.1.0-SNAPSHOT"]
+```
+
+Test:
+```clojure
+lein test
+```
+
+## Documentation
+
+Please refer to the [hirop wiki](https://github.com/orobix/hirop/wiki).
 
 ## License
 
-Copyright © 2012 Orobix Srl
+Copyright © 2013 Orobix Srl
 
 Distributed under the Eclipse Public License, the same as Clojure.

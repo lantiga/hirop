@@ -105,13 +105,9 @@
          doctypes []]
     (if (empty? prototype-list)
       doctypes
-      (recur
-       (if-let [children (get prototypes [(first prototype-list)])]
-         (conj (rest prototype-list) children)
-         (rest prototype-list))
-       (if-let [children (get prototypes [(first prototype-list)])]
-         doctypes
-         (conj doctypes (keyword (first prototype-list))))))))
+      (if-let [children (get prototypes (first prototype-list))]
+        (recur (concat (rest prototype-list) children) doctypes)
+        (recur (rest prototype-list) (conj doctypes (keyword (first prototype-list))))))))
 
 (defn- compile-prototypes
   [prototypes]
@@ -565,6 +561,10 @@
   (let [doctype (keyword doctype)
         doctype-set (set (prototype-doctypes (:prototypes context) doctype))]
     (select #(contains? doctype-set (htype (get-document context %))) (:local context))))
+
+(defn get-prototype-doctypes
+  [context prototype]
+  (get (:prototypes context) prototype))
 
 (defn checkout
   ([context]

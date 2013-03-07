@@ -79,6 +79,8 @@
          (merge-remote))
         context-baz (select-document context "3" :test)
         context-foo (select-document context "0" :test)]
+    (is (= (set (get-prototype-doctypes context :Foobarbaz)) 
+           #{:Foo :Bar :Baz}))
     (is (empty?
          (filter #(= :Foo (htype %)) (checkout-selected context-baz :test :Barbaz))))
     (is (= (get-in context-baz [:selected :test])

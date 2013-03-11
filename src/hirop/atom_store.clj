@@ -1,6 +1,6 @@
 (ns hirop.atom-store
-  (:use hirop.core
-        hirop.protocols))
+  (:use [hirop.core :only [uuid]] 
+        [hirop.protocols :only [IContextStore]]))
 
 (defn- dissoc-expired [store]
   (let [t (System/currentTimeMillis)]

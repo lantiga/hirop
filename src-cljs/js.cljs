@@ -1,22 +1,32 @@
 (ns hirop.js
   (:use [hirop.js-util :only [clj->js]]
-        [hirop.session :only [*hirop-session*]])
-  (:require [hirop.stateful :as hirop]))
+        [hirop.atom-store :only [atom-store]]
+        [hirop.protocols :only [put-context get-context update-context]])
+  (:require [hirop.core :as hirop]
+            [hirop.protocols :as p]
+            [hirop.backend :as backend]))
 
-(def session (atom {}))
+(def hirop-store (atom-store))
 
-(defn- js-f [f & args]
-  (let [clj-args (map js->clj args)]
-    (binding [*hirop-session* session]
-      (clj->js (apply f clj-args)))))
+(def hirop-conf (atom {}))
 
-(defn- context-f [context-id f & args]
-  (let [clj-args (map js->clj args)
-        clj-args (if context-id
-                   (concat clj-args [:context-id (js->clj context-id)])
-                   clj-args)]
-    (binding [*hirop-session* session]
-      (clj->js (apply f clj-args)))))
+;; TODO: PouchDb backend
+
+(defn- set-hirop-conf!
+  [doctypes contexts backend]
+  (swap! hirop-conf assoc :doctypes doctypes :contexts contexts :backend backend))
+
+(defn- init-context-in-store
+  [context-name external-ids meta-info]
+  (let [context-name (keyword context-name)]
+    (put-context
+      hirop-store
+      (hirop/init-context context-name 
+                          (get-in @hirop-conf [:contexts context-name]) 
+                          (:doctypes @hirop-conf) 
+                          (:external-ids @hirop-conf) 
+                          meta-info 
+                          (:backend @hirop-conf)))))
 
 (def test-doctypes
   {:Foo {:fields {:id {}}}
@@ -34,92 +44,178 @@
      :Baz {:select :all}}}
    :configurations {}})
 
-(defn ^:export test-init []
-  (binding [*hirop-session* session]
-    (hirop/init test-doctypes {:foo test-context} :foo)))
+(defn ^:export set-conf 
+  [doctypes contexts backend]
+  (set-hirop-conf! (js->clj doctypes) (js->clj contexts) (js->clj backend)))
 
+(defn ^:export init-context 
+  [context-name external-ids]
+  (init-context-in-store context-name (js->clj external-ids) {}))
 
-(defn ^:export init [doctypes contexts backend]
-  (js-f hirop/init doctypes contexts backend))
+(defn ^:export delete-context 
+  [context-id]
+  (p/delete-context hirop-store context-id))
 
-(defn ^:export contexts []
-  (js-f hirop/contexts))
+(defn ^:export push 
+  [context-id]
+  (->>
+    (update-context hirop-store context-id #(hirop/push % (partial backend/save (:backend @hirop-conf))))
+    hirop/get-push-result
+    (assoc {} :result)
+    clj->js))
 
-(defn ^:export doctypes []
-  (js-f hirop/doctypes))
+(defn ^:export pull 
+  [context-id]
+  (let [context (update-context hirop-store context-id 
+                                #(hirop/pull % (partial backend/fetch (:backend @hirop-conf))))]
+    (clj->js
+      {:result (if (hirop/any-conflicted? context)) :conflict :success})))
 
-(defn ^:export clean-contexts []
-  (js-f hirop/clean-contexts))
+(defn ^:export get-external 
+  [context-id]
+  (-> 
+    (hirop/get-context hirop-store context-id)
+    (get :external-ids)
+    clj->js))
 
-(defn ^:export clean-context [& [context-id]]
-  (context-f context-id hirop/clean-context))
+(defn ^:export get-doctypes 
+  [context-id]
+  (let [context (get-context hirop-store context-id)]
+    (->>
+      (map (fn [doctype] [doctype (hirop/get-doctype context (keyword doctype))]) (keys (get context :doctypes)))
+      (into {})
+      clj->js)))
 
-(defn ^:export create-context [context-name external-ids meta & [context-id]]
-  (context-f context-id hirop/create-context context-name external-ids meta))
+(defn ^:export get-doctype 
+  [context-id doctype]
+  (->
+    (get-context hirop-store context-id)
+    (hirop/get-doctype (keyword doctype))
+    clj->js))
 
-(defn ^:export new-document [doctype & [context-id]]
-  (context-f context-id hirop/new-document doctype))
+(defn ^:export get-prototype-doctypes 
+  [context-id prototype]
+  (->
+    (get-context hirop-store context-id)
+    (hirop/get-prototype-doctypes (keyword prototype))
+    clj->js))
 
-(defn ^:export new-documents [doctype-map & [context-id]]
-  (context-f context-id hirop/new-documents doctype-map))
+(defn ^:export get-current
+  [context-id doc-id]
+  (->
+    (get-context hirop-store context-id)
+    (hirop/get-document doc-id)
+    clj->js))
 
-(defn ^:export get-document [id & [context-id]]
-  (context-f context-id hirop/get-document id))
+(defn ^:export get-baseline
+  [context-id doc-id]
+  (->
+    (get-context hirop-store context-id)
+    (hirop/get-baseline doc-id)
+    clj->js))
 
-(defn ^:export get-external-documents [& [context-id]]
-  (context-f context-id hirop/get-external-documents))
+(defn ^:export get-stored
+  [context-id doc-id]
+  (->
+    (get-context hirop-store context-id)
+    (hirop/get-stored doc-id)
+    clj->js))
 
-(defn ^:export get-configurations [& [context-id]]
-  (context-f context-id hirop/get-configurations))
+(defn ^:export get-history
+  [context-id doc-id]
+  (->
+    (get-context hirop-store context-id)
+    (backend/history (:backend @hirop-conf) doc-id)
+    clj->js))
 
-(defn ^:export get-configuration [doctype & [context-id]]
-  (context-f context-id hirop/get-configuration doctype))
+(defn ^:export any-conflicted
+  [context-id]
+  (->
+    (get-context hirop-store context-id)
+    (hirop/any-conflicted?)
+    clj->js))
 
-(defn ^:export get-doctype [doctype & [context-id]]
-  (context-f context-id hirop/get-doctype doctype))
+(defn ^:export get-conflicted
+  [context-id]
+  (->
+    (get-context hirop-store context-id)
+    (hirop/checkout-conflicted)
+    clj->js))
 
-(defn ^:export get-baseline [id & [context-id]]
-  (context-f context-id hirop/get-baseline id))
+(defn ^:export commit-conflicted
+  [context-id doc-or-docs]
+  (let [doc-or-docs (js->clj doc-or-docs)]
+    (if (vector? doc-or-docs)
+      (do
+        (update-context hirop-store context-id #(hirop/mcommit-conflicted % doc-or-docs))
+        (count doc-or-docs)) 
+      (do 
+        (update-context hirop-store context-id #(hirop/commit-conflicted % doc-or-docs))
+        1))))
 
-(defn ^:export commit [document & [context-id]]
-  (context-f context-id hirop/commit document))
+(defn ^:export get-new-document
+  [context-id doctype]  
+  (->
+    (get-context hirop-store context-id)
+    (hirop/new-document (keyword doctype))
+    clj->js))
 
-(defn ^:export mcommit [documents & [context-id]]
-  (context-f context-id hirop/mcommit documents))
+(defn ^:export commit
+  [context-id doc-or-docs]
+  (let [doc-or-docs (js->clj doc-or-docs)]
+    (if (vector? doc-or-docs)
+      (do
+        (update-context hirop-store context-id #(hirop/mcommit % doc-or-docs))
+        (count doc-or-docs)) 
+      (do 
+        (update-context hirop-store context-id #(hirop/commit % doc-or-docs))
+        1))))
 
-(defn ^:export pull [& [context-id]]
-  (context-f context-id hirop/pull))
+(defn ^:export checkout
+  ([context-id]
+   (->
+     (get-context hirop-store context-id)
+     hirop/checkout
+     clj->js))
+  ([context-id doctype]
+   (->
+     (get-context hirop-store context-id)
+     (hirop/checkout (keyword doctype))
+     clj->js)))
 
-(defn ^:export get-conflicted-ids [& [context-id]]
-  (context-f context-id hirop/get-conflicted-ids))
+(defn ^:export checkout-selected
+  ([context-id selection-id]
+   (->
+     (get-context hirop-store context-id)
+     (hirop/checkout-selected (keyword selection-id)) 
+     clj->js))
+  ([context-id selection-id doctype]
+   (->
+     (get-context hirop-store context-id)
+     (hirop/checkout-selected (keyword selection-id) (keyword doctype))
+     clj->js)))
 
-(defn ^:export any-conflicted [& [context-id]]
-  (context-f context-id hirop/any-conflicted))
+(defn ^:export get-selected-ids
+  ([context-id selection-id]
+   (->
+     (get-context hirop-store context-id)
+     (hirop/get-selected-ids (keyword selection-id)) 
+     clj->js))
+  ([context-id selection-id doctype]
+   (->
+     (get-context hirop-store context-id)
+     (hirop/get-selected-ids (keyword selection-id) (keyword doctype)) 
+     clj->js)))
 
-(defn ^:export checkout-conflicted [& [context-id]]
-  (context-f context-id hirop/checkout-conflicted))
+(defn ^:export select-defaults
+  [context-id selection-id]
+  (update-context hirop-store context-id #(hirop/select-defaults % (keyword selection-id))))
 
-(defn ^:export push [& [context-id]]
-  (context-f context-id hirop/push))
+(defn ^:export select-document
+  [context-id selection-id doc-id]
+  (update-context hirop-store context-id #(hirop/select-document % doc-id (keyword selection-id))))
 
-(defn ^:export save [documents & [context-id]]
-  (context-f context-id hirop/save documents))
-
-(defn ^:export history [id & [context-id]]
-  (context-f context-id hirop/history id))
-
-(defn ^:export checkout [& [doctype context-id]]
-  (context-f context-id hirop/checkout :doctype doctype))
-
-(defn ^:export get-selected-ids [& [doctype selection-id context-id]]
-  (context-f context-id hirop/get-selected-ids :selection-id selection-id :doctype doctype))
-
-(defn ^:export checkout-selected [& [doctype selection-id context-id]]
-  (context-f context-id hirop/checkout-selected :selection-id selection-id :doctype doctype))
-
-(defn ^:export select [& [id selection-id context-id]]
-  (context-f context-id hirop/select :selection-id selection-id :id id))
-
-(defn ^:export unselect [& [doctype selection-id context-id]]
-  (context-f context-id hirop/unselect :selection-id selection-id :doctype doctype))
+(defn ^:export unselect
+  [context-id selection-id doctype]
+  (update-context hirop-store context-id #(hirop/unselect % (keyword selection-id) (keyword doctype))))
 

@@ -31,6 +31,11 @@
    (update-ttl expiration context-id)
    (dissoc-expired)))
 
+(defn- compare-and-set-in-store [store expiration context-id old-v new-v]
+  (if (= old-v (get-in store [:contexts context-id]))
+    (assoc-in-store store expiration context-id new-v)
+    old-v))
+
 (defn- update-in-store [store expiration context-id f]
   (let [store (dissoc-expired store)]
     (if (contains? (get store :contexts) context-id)
@@ -65,6 +70,11 @@
     (swap! a dissoc-in-store expiration context-id)
     nil)
 
+  (compare-and-set-context [_ context-id old-context new-context]
+    (-> 
+      (swap! a compare-and-set-in-store expiration context-id old-context new-context)
+      (= new-context)))
+
   (update-context [_ context-id f]
     (->
      (swap! a update-in-store expiration context-id f)
@@ -75,3 +85,4 @@
   [& {:keys [expiration-secs]
       :or {expiration-secs  (* 60 60)}}]
   (AtomStore. (atom {:ttl-set (sorted-set) :ttl-map {} :contexts {}}) expiration-secs))
+

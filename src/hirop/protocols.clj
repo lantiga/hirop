@@ -17,9 +17,11 @@
   (delete-context [this context-id]
     "Remove context from store by context-id, return nil")
 
+  (compare-and-set-context [this context-id old-context new-context]
+    "Set new-context in store if and only if the current context is equal to old-context")
+
   ;; For a Redis store (i.e. when not in memory) this could execute in a transaction and update
   ;; only those fields of a hash for which there is a change
   (update-context [this context-id f]
     "Execute f taking the context at context-id in input and store the result at context-id, return new context"))
 
-;; In addition, there should be a context protocol, for use directly in store.

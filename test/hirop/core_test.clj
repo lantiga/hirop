@@ -22,14 +22,15 @@
    :configurations {}})
 
 (defn cardinality-test-fetcher [_]
-  [{:_hirop {:id "0" :type :Foo}
-    :id "0"}
-   {:_hirop {:id "1" :type :Bar :rels {:Foo "0"}}
-    :title "First"}
-   {:_hirop {:id "2" :type :Bar :rels {:Foo "0"}}
-    :title "Second"}
-   {:_hirop {:id "3" :type :Baz :rels {:Bar ["1" "2"]}}
-    :title "Third"}])
+  {:documents 
+   [{:_hirop {:id "0" :type :Foo}
+     :id "0"}
+    {:_hirop {:id "1" :type :Bar :rels {:Foo "0"}}
+     :title "First"}
+    {:_hirop {:id "2" :type :Bar :rels {:Foo "0"}}
+     :title "Second"}
+    {:_hirop {:id "3" :type :Baz :rels {:Bar ["1" "2"]}}
+     :title "Third"}]})
 
 (deftest cardinality-test
   (let [context
@@ -60,16 +61,17 @@
    :configurations {}})
 
 (defn prototype-test-fetcher [_]
-  [{:_hirop {:id "0" :type :Foo}
-    :id "0"}
-   {:_hirop {:id "1" :type :Bar :rels {:Foo "0"}}
-    :title "First"}
-   {:_hirop {:id "2" :type :Bar :rels {:Foo "0"}}
-    :title "Second"}
-   {:_hirop {:id "3" :type :Baz :rels {:Foo "0"}}
-    :title "Third"}
-   {:_hirop {:id "4" :type :Baz :rels {:Foo "0"}}
-    :title "Fourth"}])
+  {:documents 
+   [{:_hirop {:id "0" :type :Foo}
+     :id "0"}
+    {:_hirop {:id "1" :type :Bar :rels {:Foo "0"}}
+     :title "First"}
+    {:_hirop {:id "2" :type :Bar :rels {:Foo "0"}}
+     :title "Second"}
+    {:_hirop {:id "3" :type :Baz :rels {:Foo "0"}}
+     :title "Third"}
+    {:_hirop {:id "4" :type :Baz :rels {:Foo "0"}}
+     :title "Fourth"}]})
 
 (deftest prototype-test
   (let [context
@@ -101,8 +103,9 @@
    :configurations {}})
 
 (defn remap-test-fetcher [_]
-  [{:_hirop {:id "0" :type :Foo}
-    :id "0"}])
+  {:documents 
+   [{:_hirop {:id "0" :type :Foo}
+     :id "0"}]})
 
 (deftest remap-test
   (let [context
@@ -144,20 +147,21 @@
    :configurations {}})
 
 (defn select-all-test-fetcher [_]
-  [{:_hirop {:id "0" :type :Foo}
-    :id "0"}
-   {:_hirop {:id "1" :type :Bar :rels {:Foo "0"}}
-    :title "First"}
-   {:_hirop {:id "2" :type :Bar :rels {:Foo "0"}}
-    :id "Second"}
-   {:_hirop {:id "3" :type :Baz :rels {:Bar "2"}}
-    :title "Third"}
-   {:_hirop {:id "4" :type :Baz :rels {:Bar "2"}}
-    :id "Fourth"}
-   {:_hirop {:id "5" :type :Baz :rels {:Bar "1"}}
-    :title "Fifth"}
-   {:_hirop {:id "6" :type :Baz :rels {:Bar "1"}}
-    :id "Sixth"}])
+  {:documents
+   [{:_hirop {:id "0" :type :Foo}
+     :id "0"}
+    {:_hirop {:id "1" :type :Bar :rels {:Foo "0"}}
+     :title "First"}
+    {:_hirop {:id "2" :type :Bar :rels {:Foo "0"}}
+     :id "Second"}
+    {:_hirop {:id "3" :type :Baz :rels {:Bar "2"}}
+     :title "Third"}
+    {:_hirop {:id "4" :type :Baz :rels {:Bar "2"}}
+     :id "Fourth"}
+    {:_hirop {:id "5" :type :Baz :rels {:Bar "1"}}
+     :title "Fifth"}
+    {:_hirop {:id "6" :type :Baz :rels {:Bar "1"}}
+     :id "Sixth"}]})
 
 (deftest select-all-test
   (let [context
@@ -190,28 +194,29 @@
      :Baq {:select :all}}}})
 
 (defn select-loop-test-fetcher [_]
-  [{:_hirop {:id "0" :type :Foo}
-    :id "0"}
-   {:_hirop {:id "1" :type :Bar :rels {:Foo "0"}}
-    :title "First"}
-   {:_hirop {:id "2" :type :Bar :rels {:Foo "0"}}
-    :id "Second"}
-   {:_hirop {:id "3" :type :Baz :rels {:Foo "0"}}
-    :title "Third"}
-   {:_hirop {:id "4" :type :Baz :rels {:Foo "0"}}
-    :id "Fourth"}
-   {:_hirop {:id "5" :type :Baq :rels {:Bar "1" :Baz "3"}}
-    :title "Fifth"}
-   {:_hirop {:id "6" :type :Baq :rels {:Bar "1" :Baz "3"}}
-    :id "Sixth"}
-   {:_hirop {:id "7" :type :Baq :rels {:Bar "1" :Baz "3"}}
-    :title "Seventh"}
-   {:_hirop {:id "8" :type :Baq :rels {:Bar "2" :Baz "4"}}
-    :id "Eighth"}
-   {:_hirop {:id "9" :type :Baq :rels {:Bar "2" :Baz "4"}}
-    :title "Nineth"}
-   {:_hirop {:id "10" :type :Baq :rels {:Bar "2" :Baz "4"}}
-    :id "Tenth"}])
+  {:documents
+   [{:_hirop {:id "0" :type :Foo}
+     :id "0"}
+    {:_hirop {:id "1" :type :Bar :rels {:Foo "0"}}
+     :title "First"}
+    {:_hirop {:id "2" :type :Bar :rels {:Foo "0"}}
+     :id "Second"}
+    {:_hirop {:id "3" :type :Baz :rels {:Foo "0"}}
+     :title "Third"}
+    {:_hirop {:id "4" :type :Baz :rels {:Foo "0"}}
+     :id "Fourth"}
+    {:_hirop {:id "5" :type :Baq :rels {:Bar "1" :Baz "3"}}
+     :title "Fifth"}
+    {:_hirop {:id "6" :type :Baq :rels {:Bar "1" :Baz "3"}}
+     :id "Sixth"}
+    {:_hirop {:id "7" :type :Baq :rels {:Bar "1" :Baz "3"}}
+     :title "Seventh"}
+    {:_hirop {:id "8" :type :Baq :rels {:Bar "2" :Baz "4"}}
+     :id "Eighth"}
+    {:_hirop {:id "9" :type :Baq :rels {:Bar "2" :Baz "4"}}
+     :title "Nineth"}
+    {:_hirop {:id "10" :type :Baq :rels {:Bar "2" :Baz "4"}}
+     :id "Tenth"}]})
 
 (deftest select-loop-test
   (let [context
@@ -238,8 +243,9 @@
 
 
 (defn select-defaults-test-fetcher [_]
-  [{:_hirop {:id "0" :type :Foo}
-    :id "0"}])
+  {:documents 
+   [{:_hirop {:id "0" :type :Foo}
+     :id "0"}]})
 
 (deftest select-defaults-test
   (let [context
@@ -258,20 +264,23 @@
    :selections {}})
 
 (defn conflict-test-fetcher-1 [_]
-  [{:_hirop {:id "0" :type :Foo :meta {}}
-    :id "0"}])
+  {:documents
+   [{:_hirop {:id "0" :type :Foo :meta {}}
+     :id "0"}]})
 
 (defn conflict-test-fetcher-2 [_]
-  [{:_hirop {:id "0" :type :Foo :meta {}}
-    :id "0"}
-   {:_hirop {:id "1" :rev "1" :type :Bar :meta {:foo :bar} :rels {:Foo "0"}}
-    :title ""}])
+  {:documents
+   [{:_hirop {:id "0" :type :Foo :meta {}}
+     :id "0"}
+    {:_hirop {:id "1" :rev "1" :type :Bar :meta {:foo :bar} :rels {:Foo "0"}}
+     :title ""}]})
 
 (defn conflict-test-fetcher-3 [_]
-  [{:_hirop {:id "0" :type :Foo :meta {}}
-    :id "0"}
-   {:_hirop {:id "1" :rev "2" :type :Bar :meta {:foo :biz} :rels {:Foo "0"}}
-    :title "BAR"}])
+  {:documents 
+   [{:_hirop {:id "0" :type :Foo :meta {}}
+     :id "0"}
+    {:_hirop {:id "1" :rev "2" :type :Bar :meta {:foo :biz} :rels {:Foo "0"}}
+     :title "BAR"}]})
 
 (deftest conflict-test
   (let [context

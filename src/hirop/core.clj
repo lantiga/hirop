@@ -321,13 +321,13 @@
 ;; all documents in a vector. Or in a special map. In any case, a checkout should succeed.
 (defn fetch
   [context fetcher]
-  (let [documents (fetcher context)]
+  (let [{documents :documents context-info :context-info} (fetcher context)]
     (reduce
      (fn [context document]
        (-> context
            (add-document-if-new document :stored)
            (add-to-remote document)))
-     context
+     (assoc context :context-info context-info) 
      documents)))
 
 (defn conflicted?
@@ -531,6 +531,7 @@
         (if (= :success (get-in save-info [:save-ret :result]))
           (->
            context
+           (assoc :context-info (get-in save-info [:save-ret :context-info]))
            (remap-tmp-ids (get-in save-info [:save-ret :remap]))
            (unstar (map #(get (get-in save-info [:save-ret :remap]) % %) (keys (:starred save-info)))))
           context)]

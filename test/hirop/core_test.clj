@@ -91,46 +91,6 @@
            {:Baz ["3" "4"], :Bar ["1" "2"], :Foo ["0"]}))))
 
 
-(def remap-test-context
-  {:relations
-   [{:from :Bar :to :Foo :external true :cardinality :one}
-    {:from :Baz :to :Bar :cardinality :many}]
-   :selections
-   {:test
-    {:Foo {:sort-by [:id] :select :last}
-     :Bar {:select :all}
-     :Baz {:select :all}}}
-   :configurations {}})
-
-(defn remap-test-fetcher [_]
-  {:documents 
-   [{:_hirop {:id "0" :type :Foo}
-     :id "0"}]})
-
-(deftest remap-test
-  (let [context
-        (->
-         (init-context :Test remap-test-context doctypes {:Foo "0"} {} :none)
-         (fetch remap-test-fetcher)
-         (merge-remote))
-        bar1 (assoc-hrel (new-document context :Bar) :Foo "0")
-        bar2 (assoc-hrel (new-document context :Bar) :Foo "0")
-        baz (assoc-hrel (new-document context :Baz) :Bar [(hid bar1) (hid bar2)])
-        remap-test-saver
-        (constantly
-          {:result :success :remap {(hid bar1) "1" (hid bar2) "2" (hid baz) "3"}})
-        context (mcommit context [bar1 bar2 baz])
-        context (select-document context "0" :test)
-        context (push context remap-test-saver)]
-    (is (= (:local context)
-           #{"0" "1" "2" "3"}))
-    (is (= (hid (first (checkout-selected context :test :Baz)))
-           "3"))
-    (is (= (hrel (first (checkout context :Baz)) :Bar)
-           ["1" "2"]))))
-
-
-
 (def select-all-test-context
   {:relations
    [{:from :Bar :to :Foo :external true :cardinality :one}

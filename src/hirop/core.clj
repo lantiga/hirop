@@ -2,17 +2,11 @@
   (:use [clojure.set :only [union select difference]])
   (:require [clojure.string :as string]))
 
-(def tmp-prefix "tmp")
-
 (defn uuid
   []
 ;*CLJSBUILD-REMOVE*; (apply str (map (fn [x] (if (= x \0) (.toString (bit-or (* 16 (.random js/Math)) 0) 16) x)) "00000000-0000-4000-0000-000000000000"))
 ;*CLJSBUILD-REMOVE*;#_
   (str (java.util.UUID/randomUUID)))
-
-(defn tmp-uuid
-  []
-  (str tmp-prefix (uuid)))
 
 (defn hid [doc]
   (get-in doc [:_hirop :id]))
@@ -61,14 +55,6 @@
 
 (defn assoc-hconf [doc conf]
   (assoc-in doc [:_hirop :conf] conf))
-
-(defn is-temporary-id?
-  [id]
-  (string? (re-find (re-pattern (str "^" tmp-prefix)) id)))
-
-(defn has-temporary-id?
-  [doc]
-  (is-temporary-id? (hid doc)))
 
 (defn- get-relation-fields
   [context doctype]
@@ -207,7 +193,7 @@
                    (get context :external-ids))]
     (->
      empty-document
-     (assoc-hid (tmp-uuid))
+     (assoc-hid (uuid))
      (assoc-htype doctype)
      (assoc-in [:_hirop :conf] configuration)
      (assoc-hrels relations)
@@ -304,7 +290,7 @@
         (.. (java.text.SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:ssZ") (format (java.util.Date.)))
         document (assoc-hmeta document
                               (merge (hmeta document) (:meta context) {:timestamp timestamp}))
-        document (if (hid document) document (assoc-hid document (tmp-uuid)))
+        document (if (hid document) document (assoc-hid document (uuid)))
         context (if baseline (add-document context baseline :baseline) context)]
     (-> context
         (add-document document :starred)
@@ -454,68 +440,6 @@
   [context]
   (:push-result context))
 
-(defn- remap-tmp-ids
-  [context tmp-map]
-  (->
-   context
-   (update-in
-    [:starred]
-    (fn [starred]
-      (into
-       {}
-       (map
-        (fn [[id doc]]
-          (let [new-id (or (get tmp-map id) id)
-                new-relations
-                (into {} (map
-                          (fn [[k val]]
-                            (if (coll? val)
-                              [k (vec (map #(or (get tmp-map %) %) val))]
-                              [k (or (get tmp-map val) val)]))
-                          (hrels doc)))
-                new-doc (-> doc (assoc-hid new-id) (assoc-hrels new-relations))]
-            [new-id new-doc]))
-        starred))))
-   (update-in
-    [:local]
-    (fn [local]
-      (->
-       local
-       (difference (set (keys tmp-map)))
-       (union (set (vals tmp-map))))))
-   (update-in
-    [:revisions]
-    (fn [revisions]
-      (into
-       {}
-       (map
-        (fn [[id revs]]
-          [(or (get tmp-map id) id) revs])
-        revisions))))
-   (assoc :selected
-     (into
-      {}
-      (map
-       (fn [[sel-id sel]]
-         (let [remapped-sel
-               (into
-                {}
-                (map
-                 (fn [[doctype doc-ids]]
-                   (let [doc-ids-coll (if (coll? doc-ids) doc-ids [doc-ids])
-                         remapped-doc-ids
-                         (map
-                          (fn [doc-id]
-                            (if (contains? tmp-map doc-id)
-                              (tmp-map doc-id)
-                              doc-id))
-                          doc-ids-coll)
-                         remapped-doc-ids (if (coll? doc-ids) remapped-doc-ids (first remapped-doc-ids))]
-                     [doctype remapped-doc-ids]))
-                 sel))]
-           [sel-id remapped-sel]))
-       (:selected context))))))
-
 (defn push-save
   [context saver]
   (let [save-ret (saver context)]
@@ -532,8 +456,7 @@
           (->
            context
            (assoc :context-info (get-in save-info [:save-ret :context-info]))
-           (remap-tmp-ids (get-in save-info [:save-ret :remap]))
-           (unstar (map #(get (get-in save-info [:save-ret :remap]) % %) (keys (:starred save-info)))))
+           (unstar (keys (:starred save-info))))
           context)]
     (set-push-result context (get-in save-info [:save-ret :result]))))
 

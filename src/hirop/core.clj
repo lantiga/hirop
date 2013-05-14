@@ -181,7 +181,7 @@
 
 (defn new-document
   [context doctype]
-  (let [fields (zipmap (keys (get-in context [:doctypes doctype :fields])) (repeat ""))
+  (let [fields (zipmap (keys (get-in context [:doctypes doctype :fields])) (repeat nil))
         configuration (get-in context [:configurations doctype])
         relations (get-relation-fields context doctype)
         relations (reduce

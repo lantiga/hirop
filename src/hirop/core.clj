@@ -1,6 +1,7 @@
 (ns hirop.core
   (:use [clojure.set :only [union select difference]])
-  (:require [clojure.string :as string]))
+  (:require [clojure.string :as string]
+            [clojure.walk :as walk]))
 
 (defn uuid
   []
@@ -84,7 +85,7 @@
       doctypes
       (if-let [children (get prototypes (first prototype-list))]
         (recur (concat (rest prototype-list) children) doctypes)
-        (recur (rest prototype-list) (conj doctypes (keyword (first prototype-list))))))))
+        (recur (rest prototype-list) (conj doctypes (first prototype-list)))))))
 
 (defn- compile-prototypes
   [prototypes]
@@ -122,13 +123,37 @@
         (fn [out fp]
           (reduce
            (fn [out tp]
-             (conj out (-> r (assoc :from (keyword fp)) (assoc :to (keyword tp)))))
+             (conj out (-> r (assoc :from fp) (assoc :to tp))))
            out
            to-p))
         out
         from-p)))
    []
    relations))
+
+(defn- safe-keyword
+  [v]
+  (if (string? v) (keyword v) v))
+
+(defn- keywordize-vals
+  [m]
+  (let [map-f (fn [[k v]] [k (safe-keyword v)])
+        vec-f (fn [v] (safe-keyword v))]
+    (walk/postwalk 
+      (fn [x] 
+        (cond 
+          (map? x) (into {} (map map-f x)) 
+          (vector? x) (into [] (map vec-f x))
+          :else x)) 
+      m)))
+
+(defn keywordize-context
+  [context]
+  (->
+    context
+    (update-in [:prototypes] keywordize-vals)
+    (update-in [:selections] keywordize-vals)
+    (update-in [:relations] keywordize-vals)))
 
 (defn- document-store
   []
@@ -146,7 +171,8 @@
 ;; Also, we should only include doctypes that are in use in the context (in relationships, selections or prototypes)
 (defn init-context
   ([context-name context doctypes external-ids meta backend]
-     (let [prototypes (compile-prototypes (:prototypes context))
+     (let [context (keywordize-context context)
+           prototypes (compile-prototypes (:prototypes context))
            selections (compile-selections (:selections context) prototypes)
            relations (compile-relations (:relations context) prototypes)]
        (->
@@ -546,10 +572,9 @@
                                (= value rel-values))))
                          (get-ids-of-type context rel-doctype))
                         rel-ids (if-let [sort-keys (get-in context [:selections selection-id rel-doctype :sort-by])]
-                                  (let [sort-keys (vec (map keyword sort-keys))]
-                                    (sort-by (fn [el] ((apply juxt sort-keys) (get-document context el))) rel-ids))
+                                  (sort-by (fn [el] ((apply juxt sort-keys) (get-document context el))) rel-ids)
                                   rel-ids)
-                        rel-ids (condp = (keyword (get-in context [:selections selection-id rel-doctype :select]))
+                        rel-ids (condp = (get-in context [:selections selection-id rel-doctype :select])
                                   :first (if (first rel-ids) [(first rel-ids)] [])
                                   :last (if (last rel-ids) [(last rel-ids)] [])
                                   :all rel-ids
